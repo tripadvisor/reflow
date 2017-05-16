@@ -1,0 +1,43 @@
+buildscript {
+    repositories {
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.10'
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.0'
+    }
+}
+
+apply plugin: 'java-library'
+apply plugin: 'net.ltgt.errorprone'
+apply plugin: 'com.github.johnrengelman.shadow'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.google.guava:guava:22.0'
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
+
+    testImplementation 'org.testng:testng:6.11'
+    testImplementation 'com.google.truth:truth:0.33'
+    testImplementation 'com.google.truth.extensions:truth-java8-extension:0.33'
+}
+
+test {
+    useTestNG()
+}
+
+shadowJar {
+    dependencies {
+        include(dependency('com.google.guava:guava:22.0'))
+    }
+    relocate 'com.google', 'com.tripadvisor.repackage.com.google'
+}
+
+javadoc {
+    title 'Reflow API'
+}
