@@ -129,6 +129,7 @@ public class WorkflowExecutor<T extends Task>
         {
             // Calculate the most recent timestamp associated with the dependencies (direct/indirect) of this node
             Instant maxDependencyTimestamp = node.getDependencies().stream()
+                    .filter(targetNodes::contains)
                     .flatMap(dependency -> Stream.concat(
                             // Consider the timestamps of the output of each direct dependency...
                             m_outputCache.getUnchecked(dependency).stream().map(timestamps::get),

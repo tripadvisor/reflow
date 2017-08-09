@@ -14,10 +14,8 @@ import java.util.function.Function;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
-import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import static com.google.common.collect.ImmutableBiMap.toImmutableBiMap;
@@ -180,43 +178,6 @@ public class Workflow<T extends Task> extends Target<T> implements Serializable
     }
 
     /**
-     * Returns a target containing only the given nodes
-     * and their dependencies.
-     */
-    @SafeVarargs
-    public final Target<T> stoppingAfter(WorkflowNode<T> node, WorkflowNode<T>... moreNodes)
-    {
-        return stoppingAfter(Lists.asList(node, moreNodes));
-    }
-
-    /**
-     * Returns a target containing only the given nodes
-     * and their dependencies.
-     */
-    public Target<T> stoppingAfter(Collection<WorkflowNode<T>> nodes)
-    {
-        return WorkflowSubset.subsetEndingAt(this, nodes);
-    }
-
-    /**
-     * Returns a target containing only the nodes corresponding
-     * to the given keys and their dependencies.
-     */
-    public Target<T> stoppingAfterKeys(String key, String... moreKeys)
-    {
-        return stoppingAfterKeys(Lists.asList(key, moreKeys));
-    }
-
-    /**
-     * Returns a target containing only the nodes corresponding
-     * to the given keys and their dependencies.
-     */
-    public Target<T> stoppingAfterKeys(Collection<String> keys)
-    {
-        return stoppingAfter(Collections2.transform(keys, m_nodes::get));
-    }
-
-    /**
      * Returns this workflow.
      *
      * @deprecated
@@ -241,5 +202,11 @@ public class Workflow<T extends Task> extends Target<T> implements Serializable
     Set<WorkflowNode<T>> getNodeSet()
     {
         return m_nodes.values();
+    }
+
+    @Override
+    boolean containsNode(WorkflowNode<T> node)
+    {
+        return m_nodes.containsValue(node);
     }
 }

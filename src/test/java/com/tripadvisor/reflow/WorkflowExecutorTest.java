@@ -67,7 +67,7 @@ public final class WorkflowExecutorTest
     private void _testRunRerun(Executor executor) throws IOException, InterruptedException, ExecutionException
     {
         // First, assemble a test graph with mock runnable and output objects.
-        // We're using this eight-node graph again:
+        // We're using this eight-node graph:
         //
         // 0-1-2-3-4
         //    \ /

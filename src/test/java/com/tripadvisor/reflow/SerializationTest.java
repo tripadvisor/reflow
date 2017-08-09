@@ -76,11 +76,7 @@ public class SerializationTest
     {
         BuilderAssembler<Task, TaskNode.Builder<Task>> builderAssembler = BuilderAssembler.usingTasks(NoOpTask::new);
         Workflow<Task> workflow = Workflow.create(builderAssembler.builderListTestConfig2());
-
-        // 0-1-2-3-4
-        //    \ /
-        //   5-6-7
-        return new Object[][] { new Object[] { workflow.stoppingAfterKeys("3") } };
+        return new Object[][] { new Object[] { workflow.startingFromKeys("1").stoppingAfterKeys("7") } };
     }
 
     @Test(dataProvider = "testSerializeWorkflowSubsetDataSet")
