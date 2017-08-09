@@ -8,7 +8,6 @@ import com.google.common.collect.ImmutableSet;
 
 final class TestTask implements Task
 {
-    private final int m_id;
     private final int m_durationMs;
     private final TestOutput m_startOutput;
     private final TestOutput m_finishOutput;
@@ -17,10 +16,9 @@ final class TestTask implements Task
     public static class TestException extends RuntimeException
     {}
 
-    private TestTask(int id, int durationMs, AtomicBoolean outputMutabilityFlag,
+    private TestTask(int durationMs, AtomicBoolean outputMutabilityFlag,
                      boolean failOnRun, boolean failOnOutputDelete)
     {
-        m_id = id;
         Preconditions.checkArgument(durationMs >= 0);
         m_durationMs = durationMs;
         m_startOutput = new TestOutput(outputMutabilityFlag, failOnOutputDelete);
@@ -28,19 +26,19 @@ final class TestTask implements Task
         m_failOnRun = failOnRun;
     }
 
-    public static TestTask succeeding(int id, int durationMs, AtomicBoolean outputMutabilityFlag)
+    public static TestTask succeeding(int durationMs, AtomicBoolean outputMutabilityFlag)
     {
-        return new TestTask(id, durationMs, outputMutabilityFlag, false, false);
+        return new TestTask(durationMs, outputMutabilityFlag, false, false);
     }
 
-    public static TestTask failingOnRun(int id, int durationMs, AtomicBoolean outputMutabilityFlag)
+    public static TestTask failingOnRun(int durationMs, AtomicBoolean outputMutabilityFlag)
     {
-        return new TestTask(id, durationMs, outputMutabilityFlag, true, false);
+        return new TestTask(durationMs, outputMutabilityFlag, true, false);
     }
 
-    public static TestTask failingOnOutputDelete(int id, int durationMs, AtomicBoolean outputMutabilityFlag)
+    public static TestTask failingOnOutputDelete(int durationMs, AtomicBoolean outputMutabilityFlag)
     {
-        return new TestTask(id, durationMs, outputMutabilityFlag, true, true);
+        return new TestTask(durationMs, outputMutabilityFlag, true, true);
     }
 
     public TestOutput getStartOutput()
@@ -83,11 +81,5 @@ final class TestTask implements Task
         }
 
         m_finishOutput.create();
-    }
-
-    @Override
-    public String toString()
-    {
-        return String.format("%s(%s)", getClass().getSimpleName(), m_id);
     }
 }

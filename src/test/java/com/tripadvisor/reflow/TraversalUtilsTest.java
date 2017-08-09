@@ -28,7 +28,7 @@ public final class TraversalUtilsTest
         BuilderAssembler<Task> builderAssembler = new BuilderAssembler<>(NoOpTask::new);
 
         List<Object[]> dataSet = new ArrayList<>();
-        Workflow<Integer, Task> graph;
+        Workflow<Task> graph;
 
         Function<WorkflowNode<Task>, Set<WorkflowNode<Task>>> getDependencies = WorkflowNode::getDependencies;
         Function<WorkflowNode<Task>, Set<WorkflowNode<Task>>> getDependents = WorkflowNode::getDependents;
@@ -38,42 +38,42 @@ public final class TraversalUtilsTest
 
         // Empty graph
         dataSet.add(new Object[] {
-                Sets.newHashSet(),
+                ImmutableSet.of(),
                 getDependencies,
-                Sets.newHashSet()
+                ImmutableSet.of()
         });
 
         // Single-node graph
         graph = Workflow.create(builderAssembler.builderList(1));
         dataSet.add(new Object[] {
-                graph.getNodes(),
+                ImmutableSet.copyOf(graph.getNodes().values()),
                 getDependencies,
-                graph.getNodes()
+                ImmutableSet.copyOf(graph.getNodes().values())
         });
 
         // Three nodes in series
         graph = Workflow.create(builderAssembler.builderListTestConfig1());
         dataSet.add(new Object[] {
-                ImmutableSet.of(graph.keyedNodes().get(1)),
+                ImmutableSet.of(graph.getNodes().get("1")),
                 getDependencies,
-                ImmutableSet.of(graph.keyedNodes().get(0),
-                                graph.keyedNodes().get(1))
+                ImmutableSet.of(graph.getNodes().get("0"),
+                                graph.getNodes().get("1"))
         });
         dataSet.add(new Object[] {
-                ImmutableSet.of(graph.keyedNodes().get(1)),
+                ImmutableSet.of(graph.getNodes().get("1")),
                 getDependents,
-                ImmutableSet.of(graph.keyedNodes().get(1),
-                                graph.keyedNodes().get(2))
+                ImmutableSet.of(graph.getNodes().get("1"),
+                                graph.getNodes().get("2"))
         });
         dataSet.add(new Object[] {
-                ImmutableSet.of(graph.keyedNodes().get(1)),
+                ImmutableSet.of(graph.getNodes().get("1")),
                 noNeighbors,
-                ImmutableSet.of(graph.keyedNodes().get(1))
+                ImmutableSet.of(graph.getNodes().get("1"))
         });
         dataSet.add(new Object[] {
-                ImmutableSet.of(graph.keyedNodes().get(1)),
+                ImmutableSet.of(graph.getNodes().get("1")),
                 allNeighbors,
-                graph.getNodes()
+                ImmutableSet.copyOf(graph.getNodes().values())
         });
 
         // 0-1-2-3-4
@@ -81,28 +81,28 @@ public final class TraversalUtilsTest
         //   5-6-7
         graph = Workflow.create(builderAssembler.builderListTestConfig2());
         dataSet.add(new Object[] {
-                ImmutableSet.of(graph.keyedNodes().get(7)),
+                ImmutableSet.of(graph.getNodes().get("7")),
                 getDependencies,
-                ImmutableSet.of(graph.keyedNodes().get(0),
-                                graph.keyedNodes().get(1),
-                                graph.keyedNodes().get(5),
-                                graph.keyedNodes().get(6),
-                                graph.keyedNodes().get(7))
+                ImmutableSet.of(graph.getNodes().get("0"),
+                                graph.getNodes().get("1"),
+                                graph.getNodes().get("5"),
+                                graph.getNodes().get("6"),
+                                graph.getNodes().get("7"))
         });
         dataSet.add(new Object[] {
-                ImmutableSet.of(graph.keyedNodes().get(3),
-                                graph.keyedNodes().get(5)),
+                ImmutableSet.of(graph.getNodes().get("3"),
+                                graph.getNodes().get("5")),
                 getDependents,
-                ImmutableSet.of(graph.keyedNodes().get(3),
-                                graph.keyedNodes().get(4),
-                                graph.keyedNodes().get(5),
-                                graph.keyedNodes().get(6),
-                                graph.keyedNodes().get(7))
+                ImmutableSet.of(graph.getNodes().get("3"),
+                                graph.getNodes().get("4"),
+                                graph.getNodes().get("5"),
+                                graph.getNodes().get("6"),
+                                graph.getNodes().get("7"))
         });
         dataSet.add(new Object[] {
-                ImmutableSet.of(graph.keyedNodes().get(6)),
+                ImmutableSet.of(graph.getNodes().get("6")),
                 allNeighbors,
-                graph.getNodes()
+                ImmutableSet.copyOf(graph.getNodes().values())
         });
 
         return dataSet.toArray(new Object[dataSet.size()][]);
@@ -114,29 +114,29 @@ public final class TraversalUtilsTest
         BuilderAssembler<Task> builderAssembler = new BuilderAssembler<>(NoOpTask::new);
 
         List<Set<WorkflowNode<Task>>> dataSet = new ArrayList<>();
-        Workflow<Integer, Task> graph;
+        Workflow<Task> graph;
 
         // Empty graph
         dataSet.add(ImmutableSet.of());
 
         // Single-node graph
         graph = Workflow.create(builderAssembler.builderList(1));
-        dataSet.add(graph.getNodes());
+        dataSet.add(ImmutableSet.copyOf(graph.getNodes().values()));
 
         // Three nodes in series
         graph = Workflow.create(builderAssembler.builderListTestConfig1());
-        dataSet.add(graph.getNodes());
-        dataSet.add(ImmutableSet.of(graph.keyedNodes().get(0), graph.keyedNodes().get(1)));
-        dataSet.add(ImmutableSet.of(graph.keyedNodes().get(1), graph.keyedNodes().get(2)));
+        dataSet.add(ImmutableSet.copyOf(graph.getNodes().values()));
+        dataSet.add(ImmutableSet.of(graph.getNodes().get("0"), graph.getNodes().get("1")));
+        dataSet.add(ImmutableSet.of(graph.getNodes().get("1"), graph.getNodes().get("2")));
 
         // In this case, the two nodes can be sorted in any order
-        dataSet.add(ImmutableSet.of(graph.keyedNodes().get(0), graph.keyedNodes().get(2)));
+        dataSet.add(ImmutableSet.of(graph.getNodes().get("0"), graph.getNodes().get("2")));
 
         // 0-1-2-3-4
         //    \ /
         //   5-6-7
         graph = Workflow.create(builderAssembler.builderListTestConfig2());
-        dataSet.add(graph.getNodes());
+        dataSet.add(ImmutableSet.copyOf(graph.getNodes().values()));
 
         return dataSet.stream().map(x -> new Object[] { x }).toArray(Object[][]::new);
     }

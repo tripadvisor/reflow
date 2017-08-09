@@ -2,15 +2,16 @@ package com.tripadvisor.reflow;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.IntStream;
+import java.util.function.Function;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
@@ -25,110 +26,112 @@ import static org.testng.Assert.fail;
 public final class WorkflowTest
 {
     private static final String TEMPLATE_EMPTY = "Input collection is empty";
-    private static final String TEMPLATE_CONTAINS_DUPLICATE = "Input collection contains repeated elements";
     private static final String TEMPLATE_INCOMPLETE = "Input collection is incomplete";
     private static final String GRAPH_CONTAINS_CYCLE = "Input graph contains a cycle";
 
     @DataProvider
     public Object[][] testBuildGraphDataSet()
     {
-        BuilderAssembler<Task> graphBuilder = new BuilderAssembler<>(NoOpTask::new);
+        BuilderAssembler<Task> builderAssembler = new BuilderAssembler<>(NoOpTask::new);
 
         List<Object[]> dataSet = new ArrayList<>();
-        List<Builder<Integer, Task>> b;
+        List<Builder<Task>> b;
 
         // Empty graph
-        dataSet.add(new Object[] { ImmutableList.of(), IllegalStateException.class, TEMPLATE_EMPTY });
+        dataSet.add(new Object[] { ImmutableList.of(), IllegalArgumentException.class, TEMPLATE_EMPTY });
 
         // Null dependency set
-        b = graphBuilder.builderList(1);
+        b = builderAssembler.builderList(1);
         b.get(0).setDependencies(null);
         dataSet.add(new Object[] { b, null, null });
 
-        // Null user object
-        b = graphBuilder.builderList(1);
+        // Null task
+        b = builderAssembler.builderList(1);
         b.get(0).setTask(null);
         dataSet.add(new Object[] { b, NullPointerException.class, null });
 
         // Single-node graph with no edges
-        b = graphBuilder.builderList(1);
+        b = builderAssembler.builderList(1);
         b.get(0).setDependencies(ImmutableSet.of());
         dataSet.add(new Object[] { b, null, null });
 
         // Single-node graph with a loop
-        b = graphBuilder.builderList(1);
+        b = builderAssembler.builderList(1);
         b.get(0).addDependencies(b.get(0));
-        dataSet.add(new Object[] { b, IllegalStateException.class, GRAPH_CONTAINS_CYCLE });
+        dataSet.add(new Object[] { b, IllegalArgumentException.class, GRAPH_CONTAINS_CYCLE });
 
         // Two-node graph with no edges
-        b = graphBuilder.builderList(2);
+        b = builderAssembler.builderList(2);
         b.get(0).setDependencies(ImmutableSet.of());
         b.get(1).setDependencies(ImmutableSet.of());
         dataSet.add(new Object[] { b, null, null });
 
         // Two-node graph with one edge
-        b = graphBuilder.builderList(2);
+        b = builderAssembler.builderList(2);
         b.get(0).setDependencies(ImmutableSet.of());
         b.get(1).addDependencies(b.get(0));
         dataSet.add(new Object[] { b, null, null });
 
         // Two-node graph with two edges
-        b = graphBuilder.builderList(2);
+        b = builderAssembler.builderList(2);
         b.get(0).addDependencies(b.get(1));
         b.get(1).addDependencies(b.get(0));
-        dataSet.add(new Object[] { b, IllegalStateException.class, GRAPH_CONTAINS_CYCLE });
+        dataSet.add(new Object[] { b, IllegalArgumentException.class, GRAPH_CONTAINS_CYCLE });
 
         // Builder list with a duplicate element
-        b = graphBuilder.builderList(1);
-        dataSet.add(new Object[] {
-                ImmutableList.of(b.get(0), b.get(0)), IllegalStateException.class, TEMPLATE_CONTAINS_DUPLICATE
-        });
+        b = builderAssembler.builderList(1);
+        dataSet.add(new Object[] { ImmutableList.of(b.get(0), b.get(0)), IllegalArgumentException.class, null });
+
+        // Builder list with a duplicate key
+        b = builderAssembler.builderList(2);
+        b.get(1).setKey(b.get(0).getKey());
+        dataSet.add(new Object[] { b, IllegalArgumentException.class, null });
 
         // Incomplete builder list
-        b = graphBuilder.builderList(2);
+        b = builderAssembler.builderList(2);
         b.get(0).setDependencies(ImmutableSet.of());
         b.get(1).addDependencies(b.get(0));
-        dataSet.add(new Object[] { ImmutableList.of(b.get(1)), IllegalStateException.class, TEMPLATE_INCOMPLETE });
+        dataSet.add(new Object[] { ImmutableList.of(b.get(1)), IllegalArgumentException.class, TEMPLATE_INCOMPLETE });
 
         // Three-node graph with a cycle, but also a node with no dependencies
-        b = graphBuilder.builderList(3);
+        b = builderAssembler.builderList(3);
         b.get(0).setDependencies(ImmutableSet.of());
         b.get(1).addDependencies(b.get(0), b.get(2));
         b.get(2).addDependencies(b.get(1));
-        dataSet.add(new Object[] { b, IllegalStateException.class, GRAPH_CONTAINS_CYCLE });
+        dataSet.add(new Object[] { b, IllegalArgumentException.class, GRAPH_CONTAINS_CYCLE });
 
         // 0-1-2-3-4
         //    \ /
         //   5-6-7
-        b = graphBuilder.builderListTestConfig2();
+        b = builderAssembler.builderListTestConfig2();
         dataSet.add(new Object[] { b, null, null });
 
         return dataSet.toArray(new Object[dataSet.size()][]);
     }
 
     @Test(dataProvider = "testBuildGraphDataSet")
-    public void testBuildGraph(List<Builder<Integer, Task>> template,
+    public void testBuildGraph(List<Builder<Task>> template,
                                @Nullable Class<? extends Exception> expectedException,
                                @Nullable String expectedMessagePrefix)
     {
         // Build a map of the expected dependent builders
-        Map<WorkflowNode.Builder<Integer, Task>, Set<Builder<Integer, Task>>> dependentMap =
-                new HashMap<>(template.size());
+        Map<WorkflowNode.Builder<Task>, Set<Builder<Task>>> dependentMap =
+                Maps.newHashMapWithExpectedSize(template.size());
 
-        for (Builder<Integer, Task> builder : template)
+        for (Builder<Task> builder : template)
         {
             if (builder.getDependencies() == null)
             {
                 continue;
             }
-            for (WorkflowNode.Builder<Integer, Task> dependency : builder.getDependencies())
+            for (WorkflowNode.Builder<Task> dependency : builder.getDependencies())
             {
                 dependentMap.computeIfAbsent(dependency, key -> new HashSet<>()).add(builder);
             }
         }
 
         // Build the workflow itself
-        Workflow<Integer, Task> graph;
+        Workflow<Task> graph;
         try
         {
             graph = Workflow.create(template);
@@ -156,14 +159,14 @@ public final class WorkflowTest
 
         // Verify that the returned workflow matches what we passed in
         assertThat(graph.getNodes()).hasSize(template.size());
-        assertThat(graph.keyedNodes().values()).containsExactlyElementsIn(graph.getNodes());
 
-        Map<Builder<Integer, Task>, WorkflowNode<Task>> builderNodeMap = IntStream.range(0, template.size())
-                .boxed()
-                .collect(toMap(template::get, graph.keyedNodes()::get));
+        Map<Builder<Task>, WorkflowNode<Task>> builderNodeMap = template.stream().collect(toMap(
+                Function.identity(), builder -> graph.getNodes().get(builder.getKey())
+        ));
 
         builderNodeMap.forEach((builder, node) ->
         {
+            assertThat(node.getKey()).isEqualTo(builder.getKey());
             assertThat(node.getTask()).isSameAs(builder.getTask());
 
             Set<WorkflowNode<Task>> expectedDependencies = builder.getDependencies().stream()
@@ -176,5 +179,40 @@ public final class WorkflowTest
             assertThat(node.getDependencies()).containsExactlyElementsIn(expectedDependencies);
             assertThat(node.getDependents()).containsExactlyElementsIn(expectedDependents);
         });
+    }
+
+    @DataProvider
+    public Object[][] testValidKeyDataSet()
+    {
+        return new Object[][] {
+                new Object[] { null },
+                new Object[] { "aZ-_1" },
+        };
+    }
+
+    @DataProvider
+    public Object[][] testInvalidKeyDataSet()
+    {
+        return new Object[][] {
+                new Object[] { "" },
+                new Object[] { Strings.repeat("a", 257) },
+                new Object[] { "no good" },
+        };
+    }
+
+    @Test(dataProvider = "testValidKeyDataSet")
+    public void testValidKey(String key)
+    {
+        Workflow<NoOpTask> workflow = Workflow.create(ImmutableList.of(TaskNode.builder(key, new NoOpTask())));
+        workflow.getNodes().values().forEach(node -> assertThat(node.getKey()).isNotNull());
+    }
+
+    @Test(dataProvider = "testInvalidKeyDataSet",
+          expectedExceptions = IllegalArgumentException.class,
+          expectedExceptionsMessageRegExp = "^Key must match pattern " +
+                  "\\[a-zA-Z0-9\\]\\(\\?:\\[a-zA-Z0-9_-\\]\\{0,254\\}\\[a-zA-Z0-9\\]\\)\\?$")
+    public void testInvalidKey(String key)
+    {
+        Workflow.create(ImmutableList.of(TaskNode.builder(key, new NoOpTask())));
     }
 }

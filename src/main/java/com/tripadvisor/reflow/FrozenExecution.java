@@ -17,10 +17,10 @@ import com.google.common.collect.ImmutableMap;
  */
 public class FrozenExecution<T extends Task> implements Serializable
 {
-    private final Workflow<?, T> m_workflow;
+    private final Workflow<T> m_workflow;
     private final ImmutableMap<WorkflowNode<T>, NodeState> m_nodeStates;
 
-    private FrozenExecution(Workflow<?, T> workflow, ImmutableMap<WorkflowNode<T>, NodeState> nodeStates)
+    private FrozenExecution(Workflow<T> workflow, ImmutableMap<WorkflowNode<T>, NodeState> nodeStates)
     {
         m_workflow = workflow;
         m_nodeStates = nodeStates;
@@ -28,12 +28,12 @@ public class FrozenExecution<T extends Task> implements Serializable
 
     private static class SerializedForm<U extends Task> implements Serializable
     {
-        private static final long serialVersionUID = 5223720852759148392L;
+        private static final long serialVersionUID = 0L;
 
-        private final Workflow<?, U> m_workflow;
+        private final Workflow<U> m_workflow;
         private final ImmutableMap<WorkflowNode<U>, NodeState> m_nodeStates;
 
-        public SerializedForm(Workflow<?, U> workflow, ImmutableMap<WorkflowNode<U>, NodeState> nodeStates)
+        public SerializedForm(Workflow<U> workflow, ImmutableMap<WorkflowNode<U>, NodeState> nodeStates)
         {
             m_workflow = workflow;
             m_nodeStates = nodeStates;
@@ -45,10 +45,10 @@ public class FrozenExecution<T extends Task> implements Serializable
         }
     }
 
-    static <U extends Task> FrozenExecution<U> of(Workflow<?, U> workflow, Map<WorkflowNode<U>, NodeState> nodeStates)
+    static <U extends Task> FrozenExecution<U> of(Workflow<U> workflow, Map<WorkflowNode<U>, NodeState> nodeStates)
     {
         ImmutableMap<WorkflowNode<U>, NodeState> nodeStatesCopy = ImmutableMap.copyOf(nodeStates);
-        Preconditions.checkArgument(workflow.getNodes().equals(nodeStatesCopy.keySet()));
+        Preconditions.checkArgument(workflow.getNodeSet().equals(nodeStatesCopy.keySet()));
         return new FrozenExecution<>(workflow, nodeStatesCopy);
     }
 
@@ -62,7 +62,7 @@ public class FrozenExecution<T extends Task> implements Serializable
         return new SerializedForm<>(m_workflow, m_nodeStates);
     }
 
-    Workflow<?, T> getWorkflow()
+    Workflow<T> getWorkflow()
     {
         return m_workflow;
     }

@@ -1,7 +1,7 @@
 package com.tripadvisor.reflow;
 
 import java.io.Serializable;
-import java.util.Set;
+import java.util.Map;
 
 /**
  * A non-empty subset of the nodes in a workflow, with the property
@@ -10,16 +10,18 @@ import java.util.Set;
  */
 public abstract class Target<T extends Task> implements Serializable
 {
+    private static final long serialVersionUID = 0L;
+
     Target()
     {}
 
     /**
      * Returns the workflow associated with this target.
      */
-    abstract Workflow<?, T> getWorkflow();
+    abstract Workflow<T> getWorkflow();
 
     /**
-     * Returns the nodes in this target.
+     * Returns a map of the nodes in this target by key.
      */
-    public abstract Set<WorkflowNode<T>> getNodes();
+    public abstract Map<String, WorkflowNode<T>> getNodes();
 }

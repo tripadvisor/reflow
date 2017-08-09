@@ -5,25 +5,23 @@ import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Stream;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
-import com.tripadvisor.reflow.WorkflowNode.Builder;
-
-import static java.util.stream.Collectors.toSet;
+import static com.google.common.collect.ImmutableBiMap.toImmutableBiMap;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 /**
  * A set of tasks arranged in an immutable directed acyclic graph.
@@ -36,146 +34,139 @@ import static java.util.stream.Collectors.toSet;
  * This enables the intelligent execution of workflows, skipping tasks that
  * have already created their output.</p>
  */
-public class Workflow<K, T extends Task> extends Target<T> implements Serializable
+public class Workflow<T extends Task> extends Target<T> implements Serializable
 {
-    private final ImmutableBiMap<K, WorkflowNode<T>> m_keyedNodes;
-    private final ImmutableSet<WorkflowNode<T>> m_allNodes;
+    private final ImmutableBiMap<String, WorkflowNode<T>> m_nodes;
 
-    private Workflow(ImmutableBiMap<K, WorkflowNode<T>> keyedNodes, ImmutableSet<WorkflowNode<T>> allNodes)
+    private Workflow(Collection<WorkflowNode<T>> nodes)
     {
-        Optional<List<WorkflowNode<T>>> sortedNodes = TraversalUtils.topologicalSort(allNodes);
-        Preconditions.checkState(sortedNodes.isPresent(), "Input graph contains a cycle");
-        Preconditions.checkState(allNodes.containsAll(keyedNodes.values()), "Keyed nodes not a subset of all nodes");
-
-        m_keyedNodes = keyedNodes;
-        m_allNodes = ImmutableSet.copyOf(sortedNodes.get());
+        Optional<List<WorkflowNode<T>>> sortedNodes = TraversalUtils.topologicalSort(nodes);
+        Preconditions.checkArgument(sortedNodes.isPresent(), "Input graph contains a cycle");
+        m_nodes = sortedNodes.get().stream().collect(toImmutableBiMap(WorkflowNode::getKey, Function.identity()));
     }
 
-    private static class SerializedForm<KK, TT extends Task> implements Serializable
+    private static class SerializedForm<U extends Task> implements Serializable
     {
-        private static final long serialVersionUID = -3862828678509294316L;
+        private static final long serialVersionUID = 0L;
 
-        private ImmutableBiMap<KK, WorkflowNode<TT>> m_keyedNodes;
-        private ImmutableSet<WorkflowNode<TT>> m_allNodes;
+        private final ImmutableSet<WorkflowNode<U>> m_nodes;
 
-        public SerializedForm(ImmutableBiMap<KK, WorkflowNode<TT>> keyedNodes, ImmutableSet<WorkflowNode<TT>> allNodes)
+        public SerializedForm(ImmutableSet<WorkflowNode<U>> nodes)
         {
-            m_keyedNodes = keyedNodes;
-            m_allNodes = allNodes;
+            m_nodes = nodes;
         }
 
         private Object readResolve()
         {
-            return Workflow.of(m_keyedNodes, m_allNodes);
+            return Workflow.of(m_nodes);
         }
     }
 
     /**
      * Constructs a graph from a collection of node builder objects.
      *
-     * The graph represented by the builders must be acyclic. The
+     * <p>The graph represented by the builders must be acyclic. The
      * dependencies of every builder in the given collection must also be in
      * the collection, and the collection must not contain any repeated
-     * elements.
+     * elements.</p>
      *
-     * Builders with null dependency sets are translated to nodes with no
-     * dependencies.
+     * <p>Builders with null keys will yield nodes with generated keys.
+     * Builders with null dependency sets will yield nodes with no
+     * dependencies.</p>
      *
      * @param builders a collection of builder objects representing a graph
      * @return a graph corresponding to the input collection
      */
-    public static <KK, TT extends Task> Workflow<KK, TT> create(Collection<? extends WorkflowNode.Builder<KK, TT>> builders)
+    public static <U extends Task> Workflow<U> create(Collection<? extends WorkflowNode.Builder<U>> builders)
     {
-        ImmutableBiMap<Builder<KK, TT>, WorkflowNode<TT>> nodesByBuilder;
-        ImmutableBiMap<KK, WorkflowNode<TT>> nodesByKey;
+        // Take a snapshot of the provided keys, then instantiate a node for each builder
+        ImmutableBiMap<WorkflowNode.Builder<U>, String> keysByBuilder = builders.stream()
+                .filter(b -> b.getKey() != null)
+                .collect(toImmutableBiMap(Function.identity(), WorkflowNode.Builder::getKey));
+        Map<WorkflowNode.Builder<U>, WorkflowNode<U>> nodesByBuilder = Maps.newHashMapWithExpectedSize(builders.size());
+        int nextKey = 0;
 
-        // Populate maps, creating a new node for each builder in the template
-        ImmutableBiMap.Builder<WorkflowNode.Builder<KK, TT>, WorkflowNode<TT>> nodesByBuilderMutable = ImmutableBiMap.builder();
-        ImmutableBiMap.Builder<KK, WorkflowNode<TT>> nodesByKeyMutable = ImmutableBiMap.builder();
-        for (WorkflowNode.Builder<KK, TT> builder : builders)
+        for (WorkflowNode.Builder<U> builder : builders)
         {
-            WorkflowNode<TT> node = builder.build();
-            KK key = builder.getKey();
-
-            nodesByBuilderMutable.put(builder, node);
-            if (key != null)
+            String key = keysByBuilder.get(builder);
+            if (key == null)
             {
-                nodesByKeyMutable.put(key, node);
+                do
+                {
+                    key = Strings.padStart(Integer.toHexString(nextKey++), Integer.BYTES * 2, '0');
+                }
+                while (keysByBuilder.containsValue(key));
             }
-        }
 
-        try
-        {
-            nodesByBuilder = nodesByBuilderMutable.build();
-        }
-        catch (IllegalArgumentException e)
-        {
-            throw new IllegalStateException("Input collection contains repeated elements", e);
-        }
+            WorkflowNode<U> node = builder.build(key);
 
-        try
-        {
-            nodesByKey = nodesByKeyMutable.build();
-        }
-        catch (IllegalArgumentException e)
-        {
-            throw new IllegalStateException("Input collection contains repeated keys", e);
+            if (nodesByBuilder.put(builder, node) != null)
+            {
+                throw new IllegalArgumentException("Input collection contains repeated elements");
+            }
         }
 
         if (nodesByBuilder.isEmpty())
         {
-            throw new IllegalStateException("Input collection is empty");
+            throw new IllegalArgumentException("Input collection is empty");
         }
 
         // Copy over dependencies from the template
-        Function<WorkflowNode.Builder<KK, TT>, WorkflowNode<TT>> getNode = (builder) ->
+        Function<WorkflowNode.Builder<U>, WorkflowNode<U>> getNode = (builder) ->
         {
-            WorkflowNode<TT> node = nodesByBuilder.get(builder);
+            WorkflowNode<U> node = nodesByBuilder.get(builder);
             if (node == null)
             {
-                throw new IllegalStateException("Input collection is incomplete: missing builder " + builder);
+                throw new IllegalArgumentException("Input collection is incomplete: missing builder " + builder);
             }
             return node;
         };
 
         nodesByBuilder.forEach((builder, node) -> node.setDependencies(
                 Optional.ofNullable(builder.getDependenciesNullable())
-                        .orElse(Collections.emptySet())
+                        .orElse(ImmutableSet.of())
                         .stream()
                         .map(getNode)
-                        .collect(toSet())));
+                        .collect(toImmutableSet())));
 
-        // Calculate dependents
-        Map<WorkflowNode, Set<WorkflowNode<TT>>> dependentsMap = new HashMap<>(nodesByBuilder.size());
-        for (WorkflowNode<TT> node : nodesByBuilder.values())
+        return calculateDependents(nodesByBuilder.values());
+    }
+
+    private static <U extends Task> Workflow<U> of(ImmutableSet<WorkflowNode<U>> nodes)
+    {
+        Preconditions.checkArgument(
+                nodes.stream().map(WorkflowNode::getKey).distinct().count() == nodes.size(),
+                "Input collection contains repeated keys"
+        );
+
+        Preconditions.checkArgument(!nodes.isEmpty(), "Input collection is empty");
+
+        Preconditions.checkArgument(
+                nodes.stream().flatMap(node -> node.getDependencies().stream()).allMatch(nodes::contains),
+                "Input collection is incomplete"
+        );
+
+        return calculateDependents(nodes);
+    }
+
+    private static <U extends Task> Workflow<U> calculateDependents(Collection<WorkflowNode<U>> nodes)
+    {
+        Map<WorkflowNode, Set<WorkflowNode<U>>> dependentsMap = Maps.newHashMapWithExpectedSize(nodes.size());
+
+        for (WorkflowNode<U> node : nodes)
         {
-            for (WorkflowNode<TT> dependency : node.getDependencies())
+            for (WorkflowNode<U> dependency : node.getDependencies())
             {
                 dependentsMap.computeIfAbsent(dependency, key -> new HashSet<>()).add(node);
             }
         }
 
-        for (WorkflowNode<TT> node : nodesByBuilder.values())
+        for (WorkflowNode<U> node : nodes)
         {
-            node.setDependents(dependentsMap.getOrDefault(node, Collections.emptySet()));
+            node.setDependents(dependentsMap.getOrDefault(node, ImmutableSet.of()));
         }
 
-        // Finally, construct a new graph, copying the values out of
-        // nodesByBuilder to avoid holding a reference to the builders
-        return new Workflow<>(nodesByKey, ImmutableSet.copyOf(nodesByBuilder.values()));
-    }
-
-    private static <KK, TT extends Task> Workflow<KK, TT> of(ImmutableBiMap<KK, WorkflowNode<TT>> keyedNodes,
-                                                             ImmutableSet<WorkflowNode<TT>> allNodes)
-    {
-        Preconditions.checkState(
-                TraversalUtils.collectNodes(
-                        allNodes.iterator(),
-                        node -> Stream.concat(node.getDependencies().stream(), node.getDependents().stream()).iterator()
-                ).equals(allNodes),
-                "Input collection is incomplete"
-        );
-        return new Workflow<>(keyedNodes, allNodes);
+        return new Workflow<>(nodes);
     }
 
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException
@@ -185,7 +176,7 @@ public class Workflow<K, T extends Task> extends Target<T> implements Serializab
 
     private Object writeReplace()
     {
-        return new SerializedForm<>(m_keyedNodes, m_allNodes);
+        return new SerializedForm<>(ImmutableSet.copyOf(m_nodes.values()));
     }
 
     /**
@@ -211,8 +202,7 @@ public class Workflow<K, T extends Task> extends Target<T> implements Serializab
      * Returns a target containing only the nodes corresponding
      * to the given keys and their dependencies.
      */
-    @SafeVarargs
-    public final Target<T> stoppingAfterKeys(K key, K... moreKeys)
+    public Target<T> stoppingAfterKeys(String key, String... moreKeys)
     {
         return stoppingAfterKeys(Lists.asList(key, moreKeys));
     }
@@ -221,9 +211,9 @@ public class Workflow<K, T extends Task> extends Target<T> implements Serializab
      * Returns a target containing only the nodes corresponding
      * to the given keys and their dependencies.
      */
-    public Target<T> stoppingAfterKeys(Collection<? extends K> keys)
+    public Target<T> stoppingAfterKeys(Collection<String> keys)
     {
-        return stoppingAfter(Collections2.transform(keys, m_keyedNodes::get));
+        return stoppingAfter(Collections2.transform(keys, m_nodes::get));
     }
 
     /**
@@ -234,7 +224,7 @@ public class Workflow<K, T extends Task> extends Target<T> implements Serializab
      */
     @Override
     @Deprecated
-    Workflow<?, T> getWorkflow()
+    Workflow<T> getWorkflow()
     {
         return this;
     }
@@ -243,16 +233,13 @@ public class Workflow<K, T extends Task> extends Target<T> implements Serializab
      * {@inheritDoc}
      */
     @Override
-    public Set<WorkflowNode<T>> getNodes()
+    public Map<String, WorkflowNode<T>> getNodes()
     {
-        return m_allNodes;
+        return m_nodes;
     }
 
-    /**
-     * Returns a map of the nodes with an associated key in this workflow.
-     */
-    public Map<K, WorkflowNode<T>> keyedNodes()
+    Set<WorkflowNode<T>> getNodeSet()
     {
-        return m_keyedNodes;
+        return m_nodes.values();
     }
 }

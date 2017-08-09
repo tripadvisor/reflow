@@ -33,19 +33,19 @@ final class BuilderAssembler<T extends Task>
     /**
      * Returns a list containing the given number of builders.
      */
-    public List<Builder<Integer, T>> builderList(int size)
+    public List<Builder<T>> builderList(int size)
     {
         return IntStream.range(0, size)
-                .mapToObj(i -> TaskNode.builder(i, m_taskFunc.apply(i)))
+                .mapToObj(i -> TaskNode.builder(Integer.toString(i), m_taskFunc.apply(i)))
                 .collect(toList());
     }
 
     /**
      * Returns a list of builders with a fixed dependency configuration.
      */
-    public List<Builder<Integer, T>> builderListTestConfig1()
+    public List<Builder<T>> builderListTestConfig1()
     {
-        List<Builder<Integer, T>> builders = builderList(3);
+        List<Builder<T>> builders = builderList(3);
         builders.get(1).addDependencies(builders.get(0));
         builders.get(2).addDependencies(builders.get(1));
         return builders;
@@ -54,9 +54,9 @@ final class BuilderAssembler<T extends Task>
     /**
      * Returns a list of builders with a fixed dependency configuration.
      */
-    public List<Builder<Integer, T>> builderListTestConfig2()
+    public List<Builder<T>> builderListTestConfig2()
     {
-        List<Builder<Integer, T>> builders = builderList(8);
+        List<Builder<T>> builders = builderList(8);
         builders.get(1).addDependencies(builders.get(0));
         builders.get(2).addDependencies(builders.get(1));
         builders.get(3).addDependencies(builders.get(2), builders.get(6));

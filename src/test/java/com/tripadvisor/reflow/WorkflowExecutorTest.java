@@ -11,7 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import com.google.common.collect.Range;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -74,12 +74,12 @@ public final class WorkflowExecutorTest
         Random random = new Random(RUNNABLE_DURATION_SEED);
         AtomicBoolean outputMutabilityFlag = new AtomicBoolean();
         BuilderAssembler<TestTask> builderAssembler = new BuilderAssembler<>(
-                i -> TestTask.succeeding(i, random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
+                () -> TestTask.succeeding(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
         );
 
-        List<TaskNode.Builder<Integer, TestTask>> template = builderAssembler.builderListTestConfig2();
-        Workflow<Integer, TestTask> graph = Workflow.create(template);
-        Target<TestTask> upTo2 = graph.stoppingAfterKeys(2);
+        List<TaskNode.Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
+        Workflow<TestTask> graph = Workflow.create(template);
+        Target<TestTask> upTo2 = graph.stoppingAfterKeys("2");
 
         WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(
                 ExecutorWorkflowCompletionService.from(executor, TestTask::run)
@@ -95,9 +95,9 @@ public final class WorkflowExecutorTest
         Instant stage1finish = Instant.now();
         Range<Instant> stage1 = Range.closed(stage1start, stage1finish);
 
-        graph.getNodes().forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        _checkDependenciesFrom(graph.keyedNodes().get(4));
-        _checkDependenciesFrom(graph.keyedNodes().get(7));
+        graph.getNodes().values().forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
+        _checkDependenciesFrom(graph.getNodes().get("4"));
+        _checkDependenciesFrom(graph.getNodes().get("7"));
 
         // Rerun node 2 and dependencies - nothing else should be executed
         Instant stage2start = Instant.now();
@@ -110,9 +110,9 @@ public final class WorkflowExecutorTest
         Instant stage2finish = Instant.now();
         Range<Instant> stage2 = Range.closed(stage2start, stage2finish);
 
-        IntStream.of(3, 4, 5, 6, 7).mapToObj(graph.keyedNodes()::get)
+        Stream.of("3", "4", "5", "6", "7").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        IntStream.of(0, 1, 2).mapToObj(graph.keyedNodes()::get)
+        Stream.of("0", "1", "2").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage2));
 
         // Run everything - dependents of dependencies of node 2 should be executed
@@ -125,19 +125,19 @@ public final class WorkflowExecutorTest
         Instant stage3finish = Instant.now();
         Range<Instant> stage3 = Range.closed(stage3start, stage3finish);
 
-        IntStream.of(5).mapToObj(graph.keyedNodes()::get)
+        Stream.of("5").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        IntStream.of(0, 1, 2).mapToObj(graph.keyedNodes()::get)
+        Stream.of("0", "1", "2").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage2));
-        IntStream.of(3, 4, 6, 7).mapToObj(graph.keyedNodes()::get)
+        Stream.of("3", "4", "6", "7").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage3));
-        _checkDependenciesFrom(graph.keyedNodes().get(4));
+        _checkDependenciesFrom(graph.getNodes().get("4"));
 
         // Manually delete output of node 2, then run everything - only dependents of node 2 should be executed
         Instant stage4start = Instant.now();
         outputMutabilityFlag.set(true);
 
-        for (Output output : graph.keyedNodes().get(2).getTask().getOutputs())
+        for (Output output : graph.getNodes().get("2").getTask().getOutputs())
         {
             output.delete();
         }
@@ -147,16 +147,16 @@ public final class WorkflowExecutorTest
         Instant stage4finish = Instant.now();
         Range<Instant> stage4 = Range.closed(stage4start, stage4finish);
 
-        IntStream.of(5).mapToObj(graph.keyedNodes()::get)
+        Stream.of("5").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        IntStream.of(0, 1).mapToObj(graph.keyedNodes()::get)
+        Stream.of("0", "1").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage2));
-        IntStream.of(6, 7).mapToObj(graph.keyedNodes()::get)
+        Stream.of("6", "7").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage3));
-        IntStream.of(2, 3, 4).mapToObj(graph.keyedNodes()::get)
+        Stream.of("2", "3", "4").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage4));
-        _checkDependenciesFrom(graph.keyedNodes().get(4));
-        _checkDependenciesFrom(graph.keyedNodes().get(7));
+        _checkDependenciesFrom(graph.getNodes().get("4"));
+        _checkDependenciesFrom(graph.getNodes().get("7"));
     }
 
     @Test
@@ -183,12 +183,12 @@ public final class WorkflowExecutorTest
         AtomicBoolean outputMutabilityFlag = new AtomicBoolean();
         BuilderAssembler<TestTask> builderAssembler = new BuilderAssembler<>(
                 i -> i == 2 ?
-                        TestTask.failingOnRun(i, random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag) :
-                        TestTask.succeeding(i, random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
+                        TestTask.failingOnRun(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag) :
+                        TestTask.succeeding(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
         );
 
-        List<TaskNode.Builder<Integer, TestTask>> template = builderAssembler.builderListTestConfig2();
-        Workflow<Integer, TestTask> graph = Workflow.create(template);
+        List<TaskNode.Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
+        Workflow<TestTask> graph = Workflow.create(template);
 
         WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(
                 ExecutorWorkflowCompletionService.from(executor, TestTask::run)
@@ -216,11 +216,11 @@ public final class WorkflowExecutorTest
         Instant stage1finish = Instant.now();
         Range<Instant> stage1 = Range.closed(stage1start, stage1finish);
 
-        IntStream.of(0, 1).mapToObj(graph.keyedNodes()::get)
+        Stream.of("0", "1").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        IntStream.of(2, 3, 4).mapToObj(graph.keyedNodes()::get)
+        Stream.of("2", "3", "4").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasNoOutput());
-        _checkDependenciesFrom(graph.keyedNodes().get(7));
+        _checkDependenciesFrom(graph.getNodes().get("7"));
     }
 
     @Test
@@ -251,12 +251,12 @@ public final class WorkflowExecutorTest
         AtomicBoolean outputMutabilityFlag = new AtomicBoolean();
         BuilderAssembler<TestTask> builderAssembler = new BuilderAssembler<>(
                 i -> i == 2 ?
-                        TestTask.failingOnOutputDelete(i, durations[i], outputMutabilityFlag) :
-                        TestTask.succeeding(i, durations[i], outputMutabilityFlag)
+                        TestTask.failingOnOutputDelete(durations[i], outputMutabilityFlag) :
+                        TestTask.succeeding(durations[i], outputMutabilityFlag)
         );
 
-        List<TaskNode.Builder<Integer, TestTask>> template = builderAssembler.builderListTestConfig2();
-        Workflow<Integer, TestTask> graph = Workflow.create(template);
+        List<TaskNode.Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
+        Workflow<TestTask> graph = Workflow.create(template);
 
         WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(
                 ExecutorWorkflowCompletionService.from(executor, TestTask::run)
@@ -289,11 +289,11 @@ public final class WorkflowExecutorTest
         Instant stage1finish = Instant.now();
         Range<Instant> stage1 = Range.closed(stage1start, stage1finish);
 
-        IntStream.of(0, 1).mapToObj(graph.keyedNodes()::get)
+        Stream.of("0", "1").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        IntStream.of(2, 3, 4).mapToObj(graph.keyedNodes()::get)
+        Stream.of("2", "3", "4").map(graph.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasNoOutput());
-        _checkDependenciesFrom(graph.keyedNodes().get(7));
+        _checkDependenciesFrom(graph.getNodes().get("7"));
     }
 
     /**
@@ -321,7 +321,7 @@ public final class WorkflowExecutorTest
                 assertThat(finishTimestamp).isPresent();
                 assertThat(finishTimestamp.get()).isAtLeast(startTimestamp.get());
                 maxDependencyTimestamp = startTimestamp.get();
-            };
+            }
         }
 
         for (WorkflowNode<TestTask> dependency : node.getDependencies())

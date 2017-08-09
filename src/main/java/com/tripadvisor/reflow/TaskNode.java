@@ -1,6 +1,10 @@
 package com.tripadvisor.reflow;
 
 import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.InvalidObjectException;
+import java.io.ObjectInputStream;
+import java.io.ObjectStreamException;
 import java.util.Set;
 
 import com.google.common.base.Preconditions;
@@ -10,13 +14,31 @@ import com.google.common.base.Preconditions;
  */
 public class TaskNode<T extends Task> extends WorkflowNode<T>
 {
-    private static final long serialVersionUID = 8887648155684502573L;
+    private static final long serialVersionUID = 0L;
 
     private final T m_task;
 
-    private TaskNode(T task)
+    private TaskNode(String key, T task)
     {
-        m_task = Preconditions.checkNotNull(task);
+        super(key);
+        m_task = task;
+        validateState();
+    }
+
+    private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException
+    {
+        stream.defaultReadObject();
+        validateState();
+    }
+
+    private void readObjectNoData() throws ObjectStreamException
+    {
+        throw new InvalidObjectException("No object data");
+    }
+
+    private void validateState()
+    {
+        Preconditions.checkNotNull(m_task, "Null task");
     }
 
     /**
@@ -43,56 +65,71 @@ public class TaskNode<T extends Task> extends WorkflowNode<T>
     @Override
     public String toString()
     {
-        return String.format("%s(%s)", getClass().getSimpleName(), m_task);
+        return String.format("%s(%s, %s)", getClass().getSimpleName(), getKey(), m_task);
     }
 
-    public static final class Builder<K, U extends Task> extends WorkflowNode.Builder<K, U>
+    public static final class Builder<U extends Task> extends WorkflowNode.Builder<U>
     {
         private U m_task;
 
+        /**
+         * {@inheritDoc}
+         */
         @Override
-        public Builder<K, U> setKey(@Nullable K key)
+        public Builder<U> setKey(@Nullable String key)
         {
-            return (Builder<K, U>) super.setKey(key);
+            return (Builder<U>) super.setKey(key);
         }
 
+        /**
+         * {@inheritDoc}
+         */
         @Override
-        public Builder<K, U> setDependencies(Set<WorkflowNode.Builder<K, U>> dependencies)
+        public Builder<U> setDependencies(Set<WorkflowNode.Builder<U>> dependencies)
         {
-            return (Builder<K, U>) super.setDependencies(dependencies);
+            return (Builder<U>) super.setDependencies(dependencies);
         }
 
+        /**
+         * Gets the task that will be used when building nodes, or
+         * {@code null} if no task has been set.
+         */
         @Nullable
         public U getTask()
         {
             return m_task;
         }
 
-        public Builder<K, U> setTask(U task)
+        /**
+         * Sets the task that will be used when building nodes.
+         * The task must be set before constructing a workflow.
+         */
+        public Builder<U> setTask(U task)
         {
             m_task = task;
             return this;
         }
 
         @Override
-        TaskNode<U> build()
+        TaskNode<U> build(String key)
         {
-            return new TaskNode<>(m_task);
+            return new TaskNode<>(key, m_task);
         }
 
+        /**
+         * {@inheritDoc}
+         */
         @Override
         public String toString()
         {
-            return m_task == null ?
-                    super.toString() :
-                    String.format("%s(%s, %s)", getClass().getSimpleName(), getKey(), m_task);
+            return String.format("%s(%s, %s)", getClass().getSimpleName(), getKey(), m_task);
         }
     }
 
     /**
      * Returns a new builder.
      */
-    public static <K, U extends Task> TaskNode.Builder<K, U> builder()
+    public static <U extends Task> TaskNode.Builder<U> builder()
     {
         return new TaskNode.Builder<>();
     }
@@ -100,16 +137,16 @@ public class TaskNode<T extends Task> extends WorkflowNode<T>
     /**
      * Returns a new builder associated with the given task.
      */
-    public static <K, U extends Task> TaskNode.Builder<K, U> builder(U userObject)
+    public static <U extends Task> TaskNode.Builder<U> builder(U task)
     {
-        return new TaskNode.Builder<K, U>().setTask(userObject);
+        return new TaskNode.Builder<U>().setTask(task);
     }
 
     /**
      * Returns a new builder associated with the given key and task.
      */
-    public static <K, U extends Task> TaskNode.Builder<K, U> builder(K key, U userObject)
+    public static <U extends Task> TaskNode.Builder<U> builder(@Nullable String key, U task)
     {
-        return new TaskNode.Builder<K, U>().setKey(key).setTask(userObject);
+        return new TaskNode.Builder<U>().setKey(key).setTask(task);
     }
 }

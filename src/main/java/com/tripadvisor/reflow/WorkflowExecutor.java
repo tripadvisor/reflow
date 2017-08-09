@@ -3,6 +3,7 @@ package com.tripadvisor.reflow;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
@@ -76,7 +77,7 @@ public class WorkflowExecutor<T extends Task>
      */
     public void clearOutput(Target<T> target) throws IOException
     {
-        for (WorkflowNode<T> node : target.getNodes())
+        for (WorkflowNode<T> node : target.getNodes().values())
         {
             if (node.hasTask())
             {
@@ -103,17 +104,17 @@ public class WorkflowExecutor<T extends Task>
      */
     public void invalidateOutput(Target<T> target) throws IOException
     {
-        _invalidateOutput(target.getNodes(), true);
+        _invalidateOutput(target.getNodes().values(), true);
     }
 
-    private Map<Output, Instant> _invalidateOutput(Set<WorkflowNode<T>> dependencyGraph, boolean clearIfInvalid)
+    private Map<Output, Instant> _invalidateOutput(Collection<WorkflowNode<T>> targetNodes, boolean clearIfInvalid)
             throws IOException
     {
         // Cache output timestamps
         // Replace nulls with Instant.MAX (treat outputs that haven't been created yet as newer than anything else)
         Map<Output, Instant> timestamps = Maps.newHashMapWithExpectedSize(
-                dependencyGraph.stream().mapToInt(node -> m_outputCache.getUnchecked(node).size()).sum());
-        for (WorkflowNode<T> node : dependencyGraph)
+                targetNodes.stream().mapToInt(node -> m_outputCache.getUnchecked(node).size()).sum());
+        for (WorkflowNode<T> node : targetNodes)
         {
             for (Output output : m_outputCache.getUnchecked(node))
             {
@@ -122,9 +123,9 @@ public class WorkflowExecutor<T extends Task>
         }
 
         Map<WorkflowNode<T>, Instant> maxDependencyTimestamps =
-                Maps.newHashMapWithExpectedSize(dependencyGraph.size());
+                Maps.newHashMapWithExpectedSize(targetNodes.size());
 
-        for (WorkflowNode<T> node : dependencyGraph)
+        for (WorkflowNode<T> node : targetNodes)
         {
             // Calculate the most recent timestamp associated with the dependencies (direct/indirect) of this node
             Instant maxDependencyTimestamp = node.getDependencies().stream()
@@ -174,7 +175,7 @@ public class WorkflowExecutor<T extends Task>
      */
     public Execution<T> execute(Target<T> target)
     {
-        return Execution.create(m_completionService, m_strategy, target.getWorkflow(), target.getNodes());
+        return Execution.create(m_completionService, m_strategy, target.getWorkflow(), target.getNodes().values());
     }
 
     /**
@@ -187,7 +188,7 @@ public class WorkflowExecutor<T extends Task>
      */
     public Execution<T> executeFromExistingOutput(Target<T> target) throws IOException
     {
-        Set<WorkflowNode<T>> targetNodes = target.getNodes();
+        Collection<WorkflowNode<T>> targetNodes = target.getNodes().values();
 
         Map<Output, Instant> timestamps = _invalidateOutput(targetNodes, false);
 

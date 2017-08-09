@@ -9,10 +9,12 @@ import java.util.Set;
  */
 public class StructureNode<T extends Task> extends WorkflowNode<T>
 {
-    private static final long serialVersionUID = -4588265518951283418L;
+    private static final long serialVersionUID = 0L;
 
-    private StructureNode()
-    {}
+    private StructureNode(String key)
+    {
+        super(key);
+    }
 
     /**
      * Returns {@code false}.
@@ -38,31 +40,37 @@ public class StructureNode<T extends Task> extends WorkflowNode<T>
         throw new NoSuchElementException();
     }
 
-    public static final class Builder<K, U extends Task> extends WorkflowNode.Builder<K, U>
+    public static final class Builder<U extends Task> extends WorkflowNode.Builder<U>
     {
+        /**
+         * {@inheritDoc}
+         */
         @Override
-        public Builder<K, U> setKey(@Nullable K key)
+        public Builder<U> setKey(@Nullable String key)
         {
-            return (Builder<K, U>) super.setKey(key);
+            return (Builder<U>) super.setKey(key);
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        public Builder<U> setDependencies(Set<WorkflowNode.Builder<U>> dependencies)
+        {
+            return (Builder<U>) super.setDependencies(dependencies);
         }
 
         @Override
-        public Builder<K, U> setDependencies(Set<WorkflowNode.Builder<K, U>> dependencies)
+        StructureNode<U> build(String key)
         {
-            return (Builder<K, U>) super.setDependencies(dependencies);
-        }
-
-        @Override
-        StructureNode<U> build()
-        {
-            return new StructureNode<>();
+            return new StructureNode<>(key);
         }
     }
 
     /**
      * Returns a new builder.
      */
-    public static <K, U extends Task> StructureNode.Builder<K, U> builder()
+    public static <U extends Task> StructureNode.Builder<U> builder()
     {
         return new StructureNode.Builder<>();
     }
@@ -70,8 +78,8 @@ public class StructureNode<T extends Task> extends WorkflowNode<T>
     /**
      * Returns a new builder associated with the given key.
      */
-    public static <K, U extends Task> StructureNode.Builder<K, U> builder(K key)
+    public static <U extends Task> StructureNode.Builder<U> builder(@Nullable String key)
     {
-        return new StructureNode.Builder<K, U>().setKey(key);
+        return new StructureNode.Builder<U>().setKey(key);
     }
 }

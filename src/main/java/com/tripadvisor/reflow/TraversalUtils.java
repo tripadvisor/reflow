@@ -2,6 +2,7 @@ package com.tripadvisor.reflow;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
@@ -33,9 +34,10 @@ class TraversalUtils
      * given neighbor function
      */
     public static <T extends Task> Set<WorkflowNode<T>> collectNodes(
-            Set<WorkflowNode<T>> startNodes, Function<WorkflowNode<T>, Set<WorkflowNode<T>>> neighborsFunc)
+            Iterable<WorkflowNode<T>> startNodes,
+            Function<? super WorkflowNode<T>, ? extends Iterable<WorkflowNode<T>>> neighborsFunc)
     {
-        return collectNodes(startNodes.iterator(), neighborsFunc.andThen(Set::iterator));
+        return collectNodes(startNodes.iterator(), neighborsFunc.andThen(Iterable::iterator));
     }
 
     /**
@@ -49,7 +51,8 @@ class TraversalUtils
      * given neighbor function
      */
     public static <T extends Task> Set<WorkflowNode<T>> collectNodes(
-            Iterator<WorkflowNode<T>> startNodes, Function<WorkflowNode<T>, Iterator<WorkflowNode<T>>> neighborsFunc)
+            Iterator<WorkflowNode<T>> startNodes,
+            Function<? super WorkflowNode<T>, ? extends Iterator<WorkflowNode<T>>> neighborsFunc)
     {
         Traversal<T> traversal = new Traversal<>(startNodes, neighborsFunc);
         while (traversal.hasNext())
@@ -75,7 +78,8 @@ class TraversalUtils
      * the given neighbor function
      */
     public static <T extends Task> Iterator<WorkflowNode<T>> traverseNodes(
-            Iterator<WorkflowNode<T>> startNodes, Function<WorkflowNode<T>, Iterator<WorkflowNode<T>>> neighborsFunc)
+            Iterator<WorkflowNode<T>> startNodes,
+            Function<? super WorkflowNode<T>, ? extends Iterator<WorkflowNode<T>>> neighborsFunc)
     {
         return new Traversal<>(startNodes, neighborsFunc);
     }
@@ -90,10 +94,10 @@ class TraversalUtils
     {
         private final Deque<WorkflowNode<T>> m_stack = new ArrayDeque<>();
         private final Set<WorkflowNode<T>> m_seen = new HashSet<>();
-        private final Function<WorkflowNode<T>, Iterator<WorkflowNode<T>>> m_neighborsFunc;
+        private final Function<? super WorkflowNode<T>, ? extends Iterator<WorkflowNode<T>>> m_neighborsFunc;
 
         public Traversal(Iterator<WorkflowNode<T>> startNodes,
-                         Function<WorkflowNode<T>, Iterator<WorkflowNode<T>>> neighborsFunc)
+                         Function<? super WorkflowNode<T>, ? extends Iterator<WorkflowNode<T>>> neighborsFunc)
         {
             m_neighborsFunc = Preconditions.checkNotNull(neighborsFunc);
             while (startNodes.hasNext())
@@ -141,7 +145,7 @@ class TraversalUtils
      * @return a topological sort of the nodes if the graph is acyclic;
      * otherwise, an empty optional
      */
-    public static <T extends Task> Optional<List<WorkflowNode<T>>> topologicalSort(Set<WorkflowNode<T>> nodes)
+    public static <T extends Task> Optional<List<WorkflowNode<T>>> topologicalSort(Collection<WorkflowNode<T>> nodes)
     {
         // This is an iterative version of Tarjan's algorithm.
         //

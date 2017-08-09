@@ -80,12 +80,12 @@ import com.google.common.collect.Lists;
  *   o - (b) - o
  * </pre>
  */
-public class BuilderChain<K, T extends Task>
+public class BuilderChain<T extends Task>
 {
-    private WorkflowNode.Builder<K, T> m_head = StructureNode.builder();
-    private WorkflowNode.Builder<K, T> m_tail = StructureNode.builder();
+    private WorkflowNode.Builder<T> m_head = StructureNode.builder();
+    private WorkflowNode.Builder<T> m_tail = StructureNode.builder();
 
-    private Set<WorkflowNode.Builder<K, T>> m_contents = new HashSet<>();
+    private Set<WorkflowNode.Builder<T>> m_contents = new HashSet<>();
 
     private BuilderChain()
     {}
@@ -101,7 +101,7 @@ public class BuilderChain<K, T extends Task>
      * for each of the given tasks in parallel.
      */
     @SafeVarargs
-    public static <KK, TT extends Task> BuilderChain<KK, TT> ofTasks(TT task, TT... moreTasks)
+    public static <U extends Task> BuilderChain<U> ofTasks(U task, U... moreTasks)
     {
         return _of(_stream(task, moreTasks).map(TaskNode::builder));
     }
@@ -110,7 +110,7 @@ public class BuilderChain<K, T extends Task>
      * Returns a single-segment chain containing a builder
      * for each of the given tasks in parallel.
      */
-    public static <KK, TT extends Task> BuilderChain<KK, TT> ofTasks(Collection<? extends TT> tasks)
+    public static <U extends Task> BuilderChain<U> ofTasks(Collection<? extends U> tasks)
     {
         return tasks.isEmpty() ? _ofEmptySegment() : _of(tasks.stream().map(TaskNode::builder));
     }
@@ -120,8 +120,8 @@ public class BuilderChain<K, T extends Task>
      * of the given builders in parallel.
      */
     @SafeVarargs
-    public static <KK, TT extends Task> BuilderChain<KK, TT> of(WorkflowNode.Builder<KK, TT> builder,
-                                                                WorkflowNode.Builder<KK, TT>... moreBuilders)
+    public static <U extends Task> BuilderChain<U> of(WorkflowNode.Builder<U> builder,
+                                                      WorkflowNode.Builder<U>... moreBuilders)
     {
         return _of(_stream(builder, moreBuilders));
     }
@@ -130,14 +130,14 @@ public class BuilderChain<K, T extends Task>
      * Returns a single-segment chain containing each
      * of the given builders in parallel.
      */
-    public static <KK, TT extends Task> BuilderChain<KK, TT> of(Collection<WorkflowNode.Builder<KK, TT>> builders)
+    public static <U extends Task> BuilderChain<U> of(Collection<WorkflowNode.Builder<U>> builders)
     {
         return builders.isEmpty() ? _ofEmptySegment() : _of(builders.stream());
     }
 
-    private static <KK, TT extends Task> BuilderChain<KK, TT> _of(Stream<WorkflowNode.Builder<KK, TT>> builders)
+    private static <U extends Task> BuilderChain<U> _of(Stream<WorkflowNode.Builder<U>> builders)
     {
-        BuilderChain<KK, TT> self = new BuilderChain<>();
+        BuilderChain<U> self = new BuilderChain<>();
 
         builders.peek(builder -> builder.addDependencies(self.m_head))
                 .peek(builder -> self.m_tail.addDependencies(builder))
@@ -151,8 +151,7 @@ public class BuilderChain<K, T extends Task>
      * the given sub-chains in parallel.
      */
     @SafeVarargs
-    public static <KK, TT extends Task> BuilderChain<KK, TT> ofChains(BuilderChain<KK, TT> chain,
-                                                                      BuilderChain<KK, TT>... moreChains)
+    public static <U extends Task> BuilderChain<U> ofChains(BuilderChain<U> chain, BuilderChain<U>... moreChains)
     {
         return _ofChains(_stream(chain, moreChains));
     }
@@ -161,14 +160,14 @@ public class BuilderChain<K, T extends Task>
      * Returns a single-segment chain containing
      * the given sub-chains in parallel.
      */
-    public static <KK, TT extends Task> BuilderChain<KK, TT> ofChains(Collection<BuilderChain<KK, TT>> chains)
+    public static <U extends Task> BuilderChain<U> ofChains(Collection<BuilderChain<U>> chains)
     {
         return chains.isEmpty() ? _ofEmptySegment() : _ofChains(chains.stream());
     }
 
-    private static <KK, TT extends Task> BuilderChain<KK, TT> _ofChains(Stream<BuilderChain<KK, TT>> chains)
+    private static <U extends Task> BuilderChain<U> _ofChains(Stream<BuilderChain<U>> chains)
     {
-        BuilderChain<KK, TT> self = new BuilderChain<>();
+        BuilderChain<U> self = new BuilderChain<>();
 
         chains.peek(chain -> chain.m_head.addDependencies(self.m_head))
                 .peek(chain -> self.m_tail.addDependencies(chain.m_tail))
@@ -179,9 +178,9 @@ public class BuilderChain<K, T extends Task>
         return self;
     }
 
-    private static <KK, TT extends Task> BuilderChain<KK, TT> _ofEmptySegment()
+    private static <U extends Task> BuilderChain<U> _ofEmptySegment()
     {
-        BuilderChain<KK, TT> self = new BuilderChain<>();
+        BuilderChain<U> self = new BuilderChain<>();
         self.m_tail.addDependencies(self.m_head);
         return self;
     }
@@ -193,7 +192,7 @@ public class BuilderChain<K, T extends Task>
      * @return this chain, mutated
      */
     @SafeVarargs
-    public final BuilderChain<K, T> andThenTasks(T task, T... moreTasks)
+    public final BuilderChain<T> andThenTasks(T task, T... moreTasks)
     {
         return _andThen(_stream(task, moreTasks).map(TaskNode::builder));
     }
@@ -204,7 +203,7 @@ public class BuilderChain<K, T extends Task>
      *
      * @return this chain, mutated
      */
-    public BuilderChain<K, T> andThenTasks(Collection<? extends T> tasks)
+    public BuilderChain<T> andThenTasks(Collection<? extends T> tasks)
     {
         return tasks.isEmpty() ? _andThenEmptySegment() : _andThen(tasks.stream().map(TaskNode::builder));
     }
@@ -216,8 +215,7 @@ public class BuilderChain<K, T extends Task>
      * @return this chain, mutated
      */
     @SafeVarargs
-    public final BuilderChain<K, T> andThen(WorkflowNode.Builder<K, T> builder,
-                                            WorkflowNode.Builder<K, T>... moreBuilders)
+    public final BuilderChain<T> andThen(WorkflowNode.Builder<T> builder, WorkflowNode.Builder<T>... moreBuilders)
     {
         return _andThen(_stream(builder, moreBuilders));
     }
@@ -228,14 +226,14 @@ public class BuilderChain<K, T extends Task>
      *
      * @return this chain, mutated
      */
-    public BuilderChain<K, T> andThen(Collection<WorkflowNode.Builder<K, T>> builders)
+    public BuilderChain<T> andThen(Collection<WorkflowNode.Builder<T>> builders)
     {
         return builders.isEmpty() ? _andThenEmptySegment() : _andThen(builders.stream());
     }
 
-    private BuilderChain<K, T> _andThen(Stream<WorkflowNode.Builder<K, T>> builders)
+    private BuilderChain<T> _andThen(Stream<WorkflowNode.Builder<T>> builders)
     {
-        WorkflowNode.Builder<K, T> newTail = StructureNode.builder();
+        WorkflowNode.Builder<T> newTail = StructureNode.builder();
 
         builders.peek(builder -> builder.addDependencies(m_tail))
                 .peek(builder -> newTail.addDependencies(builder))
@@ -253,7 +251,7 @@ public class BuilderChain<K, T extends Task>
      * @return this chain, mutated
      */
     @SafeVarargs
-    public final BuilderChain<K, T> andThenChains(BuilderChain<K, T> chain, BuilderChain<K, T>... moreChains)
+    public final BuilderChain<T> andThenChains(BuilderChain<T> chain, BuilderChain<T>... moreChains)
     {
         return _andThenChains(_stream(chain, moreChains));
     }
@@ -264,14 +262,14 @@ public class BuilderChain<K, T extends Task>
      *
      * @return this chain, mutated
      */
-    public BuilderChain<K, T> andThenChains(Collection<BuilderChain<K, T>> chains)
+    public BuilderChain<T> andThenChains(Collection<BuilderChain<T>> chains)
     {
         return chains.isEmpty() ? _andThenEmptySegment() : _andThenChains(chains.stream());
     }
 
-    private BuilderChain<K, T> _andThenChains(Stream<BuilderChain<K, T>> chains)
+    private BuilderChain<T> _andThenChains(Stream<BuilderChain<T>> chains)
     {
-        WorkflowNode.Builder<K, T> newTail = StructureNode.builder();
+        WorkflowNode.Builder<T> newTail = StructureNode.builder();
 
         chains.peek(chain -> chain.m_head.addDependencies(m_tail))
                 .peek(chain -> newTail.addDependencies(chain.m_tail))
@@ -284,9 +282,9 @@ public class BuilderChain<K, T extends Task>
         return this;
     }
 
-    private BuilderChain<K, T> _andThenEmptySegment()
+    private BuilderChain<T> _andThenEmptySegment()
     {
-        WorkflowNode.Builder<K, T> newTail = StructureNode.builder();
+        WorkflowNode.Builder<T> newTail = StructureNode.builder();
         newTail.addDependencies(m_tail);
         m_contents.add(m_tail);
         m_tail = newTail;
@@ -298,7 +296,7 @@ public class BuilderChain<K, T extends Task>
      *
      * @return this chain, mutated
      */
-    public BuilderChain<K, T> setHeadKey(@Nullable K key)
+    public BuilderChain<T> setHeadKey(@Nullable String key)
     {
         m_head.setKey(key);
         return this;
@@ -309,7 +307,7 @@ public class BuilderChain<K, T extends Task>
      *
      * @return this chain, mutated
      */
-    public BuilderChain<K, T> setTailKey(@Nullable K key)
+    public BuilderChain<T> setTailKey(@Nullable String key)
     {
         m_tail.setKey(key);
         return this;
@@ -318,7 +316,7 @@ public class BuilderChain<K, T extends Task>
     /**
      * Returns the head of this chain.
      */
-    public WorkflowNode.Builder<K, T> getHead()
+    public WorkflowNode.Builder<T> getHead()
     {
         return m_head;
     }
@@ -326,7 +324,7 @@ public class BuilderChain<K, T extends Task>
     /**
      * Returns the current tail of this chain.
      */
-    public WorkflowNode.Builder<K, T> getTail()
+    public WorkflowNode.Builder<T> getTail()
     {
         return m_tail;
     }
@@ -335,14 +333,14 @@ public class BuilderChain<K, T extends Task>
      * Returns the set of builders in this chain.
      * Elements may be added to, but not removed from, the returned set.
      */
-    public Set<WorkflowNode.Builder<K, T>> getContents()
+    public Set<WorkflowNode.Builder<T>> getContents()
     {
-        return new AbstractSet<WorkflowNode.Builder<K, T>>()
+        return new AbstractSet<WorkflowNode.Builder<T>>()
         {
             @Override
-            public Iterator<WorkflowNode.Builder<K, T>> iterator()
+            public Iterator<WorkflowNode.Builder<T>> iterator()
             {
-                List<WorkflowNode.Builder<K, T>> contents = new ArrayList<>(size());
+                List<WorkflowNode.Builder<T>> contents = new ArrayList<>(size());
                 contents.add(m_head);
                 contents.add(m_tail);
                 contents.addAll(m_contents);
@@ -362,7 +360,7 @@ public class BuilderChain<K, T extends Task>
             }
 
             @Override
-            public boolean add(WorkflowNode.Builder<K, T> builder)
+            public boolean add(WorkflowNode.Builder<T> builder)
             {
                 return !m_head.equals(builder) && !m_tail.equals(builder) && m_contents.add(builder);
             }
@@ -386,7 +384,7 @@ public class BuilderChain<K, T extends Task>
             }
 
             @Override
-            public boolean removeIf(Predicate<? super WorkflowNode.Builder<K, T>> filter)
+            public boolean removeIf(Predicate<? super WorkflowNode.Builder<T>> filter)
             {
                 throw new UnsupportedOperationException();
             }

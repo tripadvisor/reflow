@@ -3,9 +3,10 @@ package com.tripadvisor.reflow;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -23,13 +24,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
 
 import com.tripadvisor.reflow.ExecutionStrategy.OutputRemovalReason;
 import com.tripadvisor.reflow.ExecutionStrategy.TaskCompletionBehavior;
 
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toConcurrentMap;
+
+import static com.google.common.collect.Maps.toImmutableEnumMap;
 
 /**
  * A single execution of a workflow, tracking which tasks have been completed
@@ -39,7 +41,7 @@ public class Execution<T extends Task>
 {
     private final WorkflowCompletionService<T> m_completionService;
     private final ExecutionStrategy<T> m_strategy;
-    private final Workflow<?, T> m_workflow;
+    private final Workflow<T> m_workflow;
 
     private final Lock m_lock = new ReentrantLock();
 
@@ -52,14 +54,14 @@ public class Execution<T extends Task>
     private volatile ExecutionState m_state = ExecutionState.IDLE;
 
     private Execution(WorkflowCompletionService<T> completionService, ExecutionStrategy<T> strategy,
-                      Workflow<?, T> workflow, Map<WorkflowNode<T>, NodeState> nodeStates)
+                      Workflow<T> workflow, Map<WorkflowNode<T>, NodeState> nodeStates)
     {
         m_completionService = completionService;
         m_strategy = strategy;
         m_workflow = workflow;
         m_nodeStates = nodeStates;
-        m_nodesByState = Maps.immutableEnumMap(Maps.toMap(
-                Arrays.asList(NodeState.values()),
+        m_nodesByState = EnumSet.allOf(NodeState.class).stream().collect(toImmutableEnumMap(
+                Function.identity(),
                 nodeState -> m_nodeStates.entrySet().stream()
                         .filter(e -> e.getValue() == nodeState)
                         .map(Entry::getKey)
@@ -69,14 +71,14 @@ public class Execution<T extends Task>
 
     static <U extends Task> Execution<U> create(WorkflowCompletionService<U> completionService,
                                                 ExecutionStrategy<U> strategy,
-                                                Workflow<?, U> workflow, Set<WorkflowNode<U>> nodesToRun)
+                                                Workflow<U> workflow, Collection<WorkflowNode<U>> nodesToRun)
     {
         Preconditions.checkNotNull(completionService);
         Preconditions.checkNotNull(strategy);
         Preconditions.checkNotNull(workflow);
         ImmutableSet<WorkflowNode<U>> nodesToRunCopy = ImmutableSet.copyOf(nodesToRun);
 
-        Map<WorkflowNode<U>, NodeState> nodeStates = workflow.getNodes().stream().collect(toConcurrentMap(
+        Map<WorkflowNode<U>, NodeState> nodeStates = workflow.getNodes().values().stream().collect(toConcurrentMap(
                 Function.identity(),
                 node -> !nodesToRunCopy.contains(node) ? NodeState.IRRELEVANT :
                         node.getDependencies().stream().anyMatch(nodesToRunCopy::contains) ? NodeState.NOT_READY :
