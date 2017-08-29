@@ -17,6 +17,8 @@ import com.google.common.collect.Range;
 import com.google.common.util.concurrent.MoreExecutors;
 import org.testng.annotations.Test;
 
+import com.tripadvisor.reflow.TaskNode.Builder;
+
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth8.assertThat;
 import static org.testng.Assert.fail;
@@ -73,11 +75,11 @@ public final class WorkflowExecutorTest
 
         Random random = new Random(RUNNABLE_DURATION_SEED);
         AtomicBoolean outputMutabilityFlag = new AtomicBoolean();
-        BuilderAssembler<TestTask> builderAssembler = new BuilderAssembler<>(
+        BuilderAssembler<TestTask, Builder<TestTask>> builderAssembler = BuilderAssembler.usingTasks(
                 () -> TestTask.succeeding(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
         );
 
-        List<TaskNode.Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
+        List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
         Workflow<TestTask> graph = Workflow.create(template);
         Target<TestTask> upTo2 = graph.stoppingAfterKeys("2");
 
@@ -181,13 +183,13 @@ public final class WorkflowExecutorTest
 
         Random random = new Random(RUNNABLE_DURATION_SEED);
         AtomicBoolean outputMutabilityFlag = new AtomicBoolean();
-        BuilderAssembler<TestTask> builderAssembler = new BuilderAssembler<>(
+        BuilderAssembler<TestTask, Builder<TestTask>> builderAssembler = BuilderAssembler.usingTasks(
                 i -> i == 2 ?
                         TestTask.failingOnRun(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag) :
                         TestTask.succeeding(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
         );
 
-        List<TaskNode.Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
+        List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
         Workflow<TestTask> graph = Workflow.create(template);
 
         WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(
@@ -249,13 +251,13 @@ public final class WorkflowExecutorTest
 
         int[] durations = { 10, 10, 50, 10, 10, 20, 100, 20 };
         AtomicBoolean outputMutabilityFlag = new AtomicBoolean();
-        BuilderAssembler<TestTask> builderAssembler = new BuilderAssembler<>(
+        BuilderAssembler<TestTask, Builder<TestTask>> builderAssembler = BuilderAssembler.usingTasks(
                 i -> i == 2 ?
                         TestTask.failingOnOutputDelete(durations[i], outputMutabilityFlag) :
                         TestTask.succeeding(durations[i], outputMutabilityFlag)
         );
 
-        List<TaskNode.Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
+        List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
         Workflow<TestTask> graph = Workflow.create(template);
 
         WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(

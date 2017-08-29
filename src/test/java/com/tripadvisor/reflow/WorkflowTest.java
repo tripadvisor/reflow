@@ -32,7 +32,7 @@ public final class WorkflowTest
     @DataProvider
     public Object[][] testBuildGraphDataSet()
     {
-        BuilderAssembler<Task> builderAssembler = new BuilderAssembler<>(NoOpTask::new);
+        BuilderAssembler<Task, Builder<Task>> builderAssembler = BuilderAssembler.usingTasks(NoOpTask::new);
 
         List<Object[]> dataSet = new ArrayList<>();
         List<Builder<Task>> b;

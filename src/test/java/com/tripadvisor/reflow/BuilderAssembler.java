@@ -7,45 +7,53 @@ import java.util.stream.IntStream;
 
 import com.google.common.base.Preconditions;
 
-import com.tripadvisor.reflow.TaskNode.Builder;
-
 import static java.util.stream.Collectors.toList;
 
 /**
- * Given a task supplier, instantiates builders with incrementing keys
- * and assembles them into graphs.
+ * Instantiates builders with incrementing keys and assembles them into graphs.
  */
-final class BuilderAssembler<T extends Task>
+final class BuilderAssembler<T extends Task, B extends WorkflowNode.Builder<T>>
 {
-    private final IntFunction<T> m_taskFunc;
+    private final IntFunction<B> m_builderFunc;
 
-    public BuilderAssembler(Supplier<T> taskSupplier)
+    public static <U extends Task> BuilderAssembler<U, StructureNode.Builder<U>> withoutTasks()
     {
-        Preconditions.checkNotNull(taskSupplier);
-        m_taskFunc = i -> taskSupplier.get();
+        return new BuilderAssembler<>(i -> StructureNode.builder(Integer.toString(i)));
     }
 
-    public BuilderAssembler(IntFunction<T> taskFunc)
+    public static <U extends Task> BuilderAssembler<U, TaskNode.Builder<U>> usingTasks(Supplier<U> taskSupplier)
     {
-        m_taskFunc = Preconditions.checkNotNull(taskFunc);
+        Preconditions.checkNotNull(taskSupplier);
+        return new BuilderAssembler<>(i -> TaskNode.builder(Integer.toString(i), taskSupplier.get()));
+    }
+
+    public static <U extends Task> BuilderAssembler<U, TaskNode.Builder<U>> usingTasks(IntFunction<U> taskFunc)
+    {
+        Preconditions.checkNotNull(taskFunc);
+        return new BuilderAssembler<>(i -> TaskNode.builder(Integer.toString(i), taskFunc.apply(i)));
+    }
+
+    private BuilderAssembler(IntFunction<B> builderFunc)
+    {
+        m_builderFunc = Preconditions.checkNotNull(builderFunc);
     }
 
     /**
      * Returns a list containing the given number of builders.
      */
-    public List<Builder<T>> builderList(int size)
+    public List<B> builderList(int size)
     {
         return IntStream.range(0, size)
-                .mapToObj(i -> TaskNode.builder(Integer.toString(i), m_taskFunc.apply(i)))
+                .mapToObj(m_builderFunc)
                 .collect(toList());
     }
 
     /**
      * Returns a list of builders with a fixed dependency configuration.
      */
-    public List<Builder<T>> builderListTestConfig1()
+    public List<B> builderListTestConfig1()
     {
-        List<Builder<T>> builders = builderList(3);
+        List<B> builders = builderList(3);
         builders.get(1).addDependencies(builders.get(0));
         builders.get(2).addDependencies(builders.get(1));
         return builders;
@@ -54,9 +62,9 @@ final class BuilderAssembler<T extends Task>
     /**
      * Returns a list of builders with a fixed dependency configuration.
      */
-    public List<Builder<T>> builderListTestConfig2()
+    public List<B> builderListTestConfig2()
     {
-        List<Builder<T>> builders = builderList(8);
+        List<B> builders = builderList(8);
         builders.get(1).addDependencies(builders.get(0));
         builders.get(2).addDependencies(builders.get(1));
         builders.get(3).addDependencies(builders.get(2), builders.get(6));

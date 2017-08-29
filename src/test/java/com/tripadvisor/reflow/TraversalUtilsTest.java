@@ -25,7 +25,7 @@ public final class TraversalUtilsTest
     @DataProvider
     public Object[][] testCollectNodesDataSet()
     {
-        BuilderAssembler<Task> builderAssembler = new BuilderAssembler<>(NoOpTask::new);
+        BuilderAssembler<Task, StructureNode.Builder<Task>> builderAssembler = BuilderAssembler.withoutTasks();
 
         List<Object[]> dataSet = new ArrayList<>();
         Workflow<Task> graph;
@@ -111,7 +111,7 @@ public final class TraversalUtilsTest
     @DataProvider
     public Object[][] testTopologicalSortDataSet()
     {
-        BuilderAssembler<Task> builderAssembler = new BuilderAssembler<>(NoOpTask::new);
+        BuilderAssembler<Task, StructureNode.Builder<Task>> builderAssembler = BuilderAssembler.withoutTasks();
 
         List<Set<WorkflowNode<Task>>> dataSet = new ArrayList<>();
         Workflow<Task> graph;
