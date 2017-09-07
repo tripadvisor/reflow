@@ -39,7 +39,7 @@ shadowJar {
     dependencies {
         include(dependency('com.google.guava:guava:22.0'))
     }
-    relocate 'com.google', 'com.tripadvisor.repackage.com.google'
+    relocate 'com.google', 'com.tripadvisor.reflow.repackage.com.google'
 }
 
 javadoc {
