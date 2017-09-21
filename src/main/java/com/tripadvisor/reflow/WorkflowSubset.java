@@ -35,13 +35,12 @@ class WorkflowSubset<T extends Task> extends Target<T> implements Serializable
     /**
      * Returns a target for the given nodes plus dependents. All of the given
      * nodes must be included in the given target. Dependents are defined over
-     * the subgraph containing all the nodes in the given target and all edges
-     * connecting those nodes.
+     * the subgraph induced by the nodes in the given target.
      *
-     * @param universe A target defining the subgraph over which dependents
+     * @param universe a target defining the subgraph over which dependents
      *                 will be calculated
-     * @param nodes Nodes defining the boundary of the returned target
-     * @return A target for the given nodes plus dependents in the given target
+     * @param nodes nodes defining the boundary of the returned target
+     * @return a target for the given nodes plus dependents in the given target
      */
     public static <U extends Task> Target<U> subsetBeginningAt(Target<U> universe, Collection<WorkflowNode<U>> nodes)
     {
@@ -51,13 +50,12 @@ class WorkflowSubset<T extends Task> extends Target<T> implements Serializable
     /**
      * Returns a target for the given nodes plus dependencies. All of the given
      * nodes must be included in the given target. Dependencies are defined over
-     * the subgraph containing all the nodes in the given target and all edges
-     * connecting those nodes.
+     * the subgraph induced by the nodes in the given target.
      *
-     * @param universe A target defining the subgraph over which dependencies
+     * @param universe a target defining the subgraph over which dependencies
      *                 will be calculated
-     * @param nodes Nodes defining the boundary of the returned target
-     * @return A target for the given nodes
+     * @param nodes nodes defining the boundary of the returned target
+     * @return a target for the given nodes
      * plus dependencies in the given target
      */
     public static <U extends Task> Target<U> subsetEndingAt(Target<U> universe, Collection<WorkflowNode<U>> nodes)

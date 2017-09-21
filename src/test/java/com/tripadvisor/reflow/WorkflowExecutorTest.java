@@ -83,15 +83,14 @@ public final class WorkflowExecutorTest
         Workflow<TestTask> graph = Workflow.create(template);
         Target<TestTask> upTo2 = graph.stoppingAfterKeys("2");
 
-        WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(
-                ExecutorWorkflowCompletionService.from(executor, TestTask::run)
-        );
+        TaskScheduler<Runnable> scheduler = LocalTaskScheduler.create(executor);
+        OutputHandler outputHandler = OutputHandler.create();
 
         // Run everything!
         Instant stage1start = Instant.now();
         outputMutabilityFlag.set(true);
 
-        workflowExecutor.executeFromExistingOutput(graph).run();
+        Execution.newExecution(graph, scheduler, outputHandler).run();
 
         outputMutabilityFlag.set(false);
         Instant stage1finish = Instant.now();
@@ -105,8 +104,8 @@ public final class WorkflowExecutorTest
         Instant stage2start = Instant.now();
         outputMutabilityFlag.set(true);
 
-        workflowExecutor.clearOutput(upTo2);
-        workflowExecutor.executeFromExistingOutput(upTo2).run();
+        outputHandler.removeOutput(upTo2);
+        Execution.newExecutionFromExistingOutput(upTo2, scheduler, outputHandler).run();
 
         outputMutabilityFlag.set(false);
         Instant stage2finish = Instant.now();
@@ -121,7 +120,7 @@ public final class WorkflowExecutorTest
         Instant stage3start = Instant.now();
         outputMutabilityFlag.set(true);
 
-        workflowExecutor.executeFromExistingOutput(graph).run();
+        Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
 
         outputMutabilityFlag.set(false);
         Instant stage3finish = Instant.now();
@@ -143,7 +142,7 @@ public final class WorkflowExecutorTest
         {
             output.delete();
         }
-        workflowExecutor.executeFromExistingOutput(graph).run();
+        Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
 
         outputMutabilityFlag.set(false);
         Instant stage4finish = Instant.now();
@@ -192,9 +191,8 @@ public final class WorkflowExecutorTest
         List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
         Workflow<TestTask> graph = Workflow.create(template);
 
-        WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(
-                ExecutorWorkflowCompletionService.from(executor, TestTask::run)
-        );
+        TaskScheduler<Runnable> scheduler = LocalTaskScheduler.create(executor);
+        OutputHandler outputHandler = OutputHandler.create();
 
         // Run everything.
         // Nodes 0-1 should be executed (dependencies of node 2)
@@ -206,7 +204,7 @@ public final class WorkflowExecutorTest
 
         try
         {
-            workflowExecutor.executeFromExistingOutput(graph).run();
+            Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
             fail("Exception not propagated");
         }
         catch (ExecutionException e)
@@ -260,9 +258,8 @@ public final class WorkflowExecutorTest
         List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
         Workflow<TestTask> graph = Workflow.create(template);
 
-        WorkflowExecutor<TestTask> workflowExecutor = WorkflowExecutor.create(
-                ExecutorWorkflowCompletionService.from(executor, TestTask::run)
-        );
+        TaskScheduler<Runnable> scheduler = LocalTaskScheduler.create(executor);
+        OutputHandler outputHandler = OutputHandler.create();
 
         // Run everything.
         // Nodes 0-1 should be executed (dependencies of node 2)
@@ -274,13 +271,13 @@ public final class WorkflowExecutorTest
 
         try
         {
-            workflowExecutor.executeFromExistingOutput(graph).run();
+            Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
             fail("Exception not propagated");
         }
         catch (ExecutionException e)
         {
             assertThat(e).hasCauseThat().isInstanceOf(TestTask.TestException.class);
-            assertThat(e.getSuppressed()).hasLength(2);
+            assertThat(e.getSuppressed()).hasLength(1);
             for (Throwable t : e.getSuppressed())
             {
                 assertThat(t).isInstanceOf(TestOutput.TestOutputException.class);

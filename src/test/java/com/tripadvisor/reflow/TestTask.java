@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 
-final class TestTask implements Task
+final class TestTask implements Task, Runnable
 {
     private final int m_durationMs;
     private final TestOutput m_startOutput;
@@ -62,6 +62,7 @@ final class TestTask implements Task
         return ImmutableSet.copyOf(getTestOutputs());
     }
 
+    @Override
     public void run()
     {
         m_startOutput.create();

@@ -1,17 +1,15 @@
 package com.tripadvisor.reflow;
 
 /**
- * The state of a node with regards to execution. Even if a node has no
- * associated task, it will transition from {@link #NOT_READY} to
- * {@link #READY} to {@link #SUBMITTED} to {@link #SUCCEEDED} for
- * bookkeeping purposes.
+ * The state of a node within a particular execution.
  *
  * <p>Possible transitions between states:
  *
  * <p>{@link #NOT_READY} -&gt; {@link #READY}
- * <br>{@link #READY} -&gt; {@link #SUBMITTED}
- * <br>{@link #SUBMITTED} -&gt; {@link #SUCCEEDED}
- * <br>{@link #SUBMITTED} -&gt; {@link #FAILED}
+ * <br>{@link #READY} -&gt; {@link #SCHEDULED}
+ * <br>{@link #READY} -&gt; {@link #SUCCEEDED}
+ * <br>{@link #SCHEDULED} -&gt; {@link #SUCCEEDED}
+ * <br>{@link #SCHEDULED} -&gt; {@link #FAILED}
  */
 public enum NodeState
 {
@@ -32,12 +30,13 @@ public enum NodeState
     READY(false),
 
     /**
-     * The node has been submitted for execution.
+     * The node's associated task has been scheduled for execution.
      */
-    SUBMITTED(false),
+    SCHEDULED(false),
 
     /**
-     * The node's associated task (if any) executed successfully.
+     * If the node has an associated task, it executed successfully.
+     * Execution has progressed past the node.
      */
     SUCCEEDED(true),
 

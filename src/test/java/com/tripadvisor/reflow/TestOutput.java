@@ -12,6 +12,7 @@ final class TestOutput implements Output
 {
     private final AtomicBoolean m_mutabilityFlag;
     private final boolean m_failOnDelete;
+
     @Nullable
     private Instant m_timestamp;
 

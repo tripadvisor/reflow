@@ -1,32 +1,35 @@
 package com.tripadvisor.reflow;
 
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-
-import com.tripadvisor.reflow.ExecutionStrategy.OutputRemovalReason;
-import com.tripadvisor.reflow.ExecutionStrategy.TaskCompletionBehavior;
 
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toConcurrentMap;
@@ -35,64 +38,208 @@ import static com.google.common.collect.Maps.toImmutableEnumMap;
 
 /**
  * A single execution of a workflow, tracking which tasks have been completed
- * and scheduling new tasks as their dependencies are satisfied.
+ * and scheduling new tasks as their dependencies are satisfied. Executions can
+ * only move forward: To rerun a task that has already been completed, create
+ * a new execution.
  */
 public class Execution<T extends Task>
 {
-    private final WorkflowCompletionService<T> m_completionService;
-    private final ExecutionStrategy<T> m_strategy;
+    // Use of the GuardedBy annotation in this class is not exhaustive
+    // because accessing guarded members in a stream expression trips up
+    // Error Prone (see https://github.com/google/error-prone/issues/536)
+
     private final Workflow<T> m_workflow;
+
+    private final TaskScheduler<? super T> m_scheduler;
+    private final OutputHandler m_outputHandler;
 
     private final Lock m_lock = new ReentrantLock();
 
-    private final Map<WorkflowNode<T>, NodeState> m_nodeStates;
+    @GuardedBy("m_lock")
+    private final Condition m_taskNodeAvailable = m_lock.newCondition();
+
+    private final Map<WorkflowNode<T>, NodeStatus> m_nodeStatuses;
     private final ImmutableMap<NodeState, Set<WorkflowNode<T>>> m_nodesByState;
 
-    private final Queue<WorkflowNode<T>> m_structureNodeQueue = new ArrayDeque<>();
-    private final List<Exception> m_exceptions = new ArrayList<>(4);
+    @GuardedBy("m_lock")
+    private final Queue<StructureNode<T>> m_structureNodeQueue = new ArrayDeque<>();
+
+    @GuardedBy("m_lock")
+    private final Queue<TaskNodeCompletion<T>> m_taskNodeQueue = new ArrayDeque<>();
+
+    @GuardedBy("m_lock")
+    private final List<Exception> m_exceptions = new ArrayList<>();
 
     private volatile ExecutionState m_state = ExecutionState.IDLE;
 
-    private Execution(WorkflowCompletionService<T> completionService, ExecutionStrategy<T> strategy,
-                      Workflow<T> workflow, Map<WorkflowNode<T>, NodeState> nodeStates)
+    private volatile boolean m_shutdownOnFailure = true;
+
+    @GuardedBy("m_lock")
+    private Thread m_driverThread;
+
+    private Execution(Workflow<T> workflow, TaskScheduler<? super T> scheduler, OutputHandler outputHandler,
+                      Map<WorkflowNode<T>, NodeStatus> nodeStatuses)
     {
-        m_completionService = completionService;
-        m_strategy = strategy;
-        m_workflow = workflow;
-        m_nodeStates = nodeStates;
-        m_nodesByState = EnumSet.allOf(NodeState.class).stream().collect(toImmutableEnumMap(
+        m_workflow = Preconditions.checkNotNull(workflow);
+        m_scheduler = Preconditions.checkNotNull(scheduler);
+        m_outputHandler = Preconditions.checkNotNull(outputHandler);
+
+        m_nodeStatuses = nodeStatuses;
+        m_nodesByState = Arrays.stream(NodeState.values()).collect(toImmutableEnumMap(
                 Function.identity(),
-                nodeState -> m_nodeStates.entrySet().stream()
-                        .filter(e -> e.getValue() == nodeState)
+                state -> m_nodeStatuses.entrySet().stream()
+                        .filter(e -> e.getValue().getState().equals(state))
                         .map(Entry::getKey)
                         .collect(toCollection(ConcurrentHashMap::newKeySet))
         ));
     }
 
-    static <U extends Task> Execution<U> create(WorkflowCompletionService<U> completionService,
-                                                ExecutionStrategy<U> strategy,
-                                                Workflow<U> workflow, Collection<WorkflowNode<U>> nodesToRun)
+    /**
+     * Returns a new execution over the given nodes,
+     * backed by the given task scheduler and output handler.
+     */
+    private static <U extends Task> Execution<U> newExecutionFromNodesToRun(Workflow<U> workflow,
+                                                                            TaskScheduler<? super U> scheduler,
+                                                                            OutputHandler outputHandler,
+                                                                            Collection<WorkflowNode<U>> nodesToRun)
     {
-        Preconditions.checkNotNull(completionService);
-        Preconditions.checkNotNull(strategy);
-        Preconditions.checkNotNull(workflow);
-        ImmutableSet<WorkflowNode<U>> nodesToRunCopy = ImmutableSet.copyOf(nodesToRun);
+        Set<WorkflowNode<U>> nodesToRunSet = nodesToRun instanceof Set ?
+                (Set<WorkflowNode<U>>) nodesToRun : ImmutableSet.copyOf(nodesToRun);
 
-        Map<WorkflowNode<U>, NodeState> nodeStates = workflow.getNodes().values().stream().collect(toConcurrentMap(
-                Function.identity(),
-                node -> !nodesToRunCopy.contains(node) ? NodeState.IRRELEVANT :
-                        node.getDependencies().stream().anyMatch(nodesToRunCopy::contains) ? NodeState.NOT_READY :
-                                NodeState.READY
-        ));
+        Map<WorkflowNode<U>, NodeStatus> nodeStates = workflow.getNodes().values().stream()
+                .collect(toConcurrentMap(
+                        Function.identity(),
+                        node -> !nodesToRunSet.contains(node) ? NodeStatus.withoutToken(NodeState.IRRELEVANT) :
+                                node.getDependencies().stream().anyMatch(nodesToRunSet::contains) ?
+                                        NodeStatus.withoutToken(NodeState.NOT_READY) :
+                                        NodeStatus.withoutToken(NodeState.READY)
+                ));
 
-        return new Execution<>(completionService, strategy, workflow, nodeStates);
+        return new Execution<>(workflow, scheduler, outputHandler, nodeStates);
     }
 
-    static <U extends Task> Execution<U> thaw(WorkflowCompletionService<U> completionService,
-                                              ExecutionStrategy<U> strategy, FrozenExecution<U> execution)
+    /**
+     * Returns a new execution over the given target,
+     * backed by the given task scheduler and a default output handler.
+     *
+     * <p>Equivalent to calling
+     * {@link #newExecution(Target, TaskScheduler, OutputHandler)},
+     * supplying {@link OutputHandler#create()} as the third parameter.</p>
+     */
+    public static <U extends Task> Execution<U> newExecution(Target<U> target, TaskScheduler<? super U> scheduler)
     {
-        return new Execution<>(Preconditions.checkNotNull(completionService), Preconditions.checkNotNull(strategy),
-                               execution.getWorkflow(), new ConcurrentHashMap<>(execution.getNodeStates()));
+        return newExecution(target, scheduler, OutputHandler.create());
+    }
+
+    /**
+     * Returns a new execution over the given target,
+     * backed by the given task scheduler and output handler.
+     */
+    public static <U extends Task> Execution<U> newExecution(Target<U> target,
+                                                             TaskScheduler<? super U> scheduler,
+                                                             OutputHandler outputHandler)
+    {
+        return newExecutionFromNodesToRun(target.getWorkflow(), scheduler, outputHandler, target.getNodes().values());
+    }
+
+    /**
+     * Returns a new execution over the given target, backed by the given task
+     * scheduler and a default output handler. Instead of including the entire
+     * target, the execution will skip nodes with existing, up-to-date output.
+     *
+     * <p>Equivalent to calling
+     * {@link #newExecutionFromExistingOutput(Target, TaskScheduler, OutputHandler)},
+     * supplying {@link OutputHandler#create()} as the third parameter.</p>
+     */
+    public static <U extends Task> Execution<U> newExecutionFromExistingOutput(Target<U> target,
+                                                                               TaskScheduler<? super U> scheduler)
+            throws IOException
+    {
+        return newExecutionFromExistingOutput(target, scheduler, OutputHandler.create());
+    }
+
+    /**
+     * Returns a new execution over the given target, backed by the given task
+     * scheduler and a default output handler. Instead of including the entire
+     * target, the execution will skip tasks with existing, up-to-date output.
+     *
+     * <p>Initially, the set of nodes to run contains all target nodes without
+     * dependents that are also in the target. Next, it is limited to nodes
+     * without existing output (specifically, nodes that have no associated
+     * task, nodes with an associated task that creates no output, and nodes
+     * with an output-creating task where the output has not been created or
+     * is out of-date). Finally, the set is repeatedly expanded to include
+     * direct dependencies without existing output, stopping when no such
+     * dependencies exist.</p>
+     */
+    public static <U extends Task> Execution<U> newExecutionFromExistingOutput(Target<U> target,
+                                                                               TaskScheduler<? super U> scheduler,
+                                                                               OutputHandler outputHandler)
+            throws IOException
+    {
+        Collection<WorkflowNode<U>> targetNodes = target.getNodes().values();
+        Map<Output, Instant> timestamps = outputHandler.invalidateOutput(targetNodes).getValidatedTimestamps();
+
+        Predicate<WorkflowNode<U>> isTailNode = node -> node.getDependents().stream().noneMatch(targetNodes::contains);
+
+        Predicate<WorkflowNode<U>> noOutputOrOutputMissing = node ->
+        {
+            if (!node.hasTask())
+            {
+                return true;
+            }
+            Set<Output> outputs = node.getTask().getOutputs();
+            return outputs.isEmpty() || outputs.stream()
+                    .map(timestamps::get)
+                    .anyMatch(Predicate.isEqual(Instant.MAX));
+        };
+
+        Set<WorkflowNode<U>> nodesToRun = TraversalUtils.collectNodes(
+                targetNodes.stream()
+                        .filter(isTailNode)
+                        .filter(noOutputOrOutputMissing)
+                        .iterator(),
+                node -> node.getDependencies().stream()
+                        .filter(noOutputOrOutputMissing)
+                        .iterator()
+        );
+
+        return newExecutionFromNodesToRun(target.getWorkflow(), scheduler, outputHandler, nodesToRun);
+    }
+
+    /**
+     * Un-freezes an execution, returning a new execution backed by the given
+     * task scheduler and a default output handler.
+     *
+     * <p>Equivalent to calling
+     * {@link #thaw(FrozenExecution, TaskScheduler, OutputHandler)},
+     * supplying {@link OutputHandler#create()} as the third parameter.</p>
+     *
+     * @throws InvalidTokenException if the frozen execution includes scheduled
+     * task tokens that are rejected by the given scheduler
+     */
+    public static <U extends Task> Execution<U> thaw(FrozenExecution<U> frozen, TaskScheduler<? super U> scheduler)
+            throws InvalidTokenException
+    {
+        return thaw(frozen, scheduler, OutputHandler.create());
+    }
+
+    /**
+     * Un-freezes an execution, returning a new execution backed by the given
+     * task scheduler and output handler.
+     *
+     * @throws InvalidTokenException if the frozen execution includes scheduled
+     * task tokens that are rejected by the given scheduler
+     */
+    public static <U extends Task> Execution<U> thaw(FrozenExecution<U> frozen,
+                                                     TaskScheduler<? super U> scheduler,
+                                                     OutputHandler outputHandler) throws InvalidTokenException
+    {
+        Execution<U> thawed = new Execution<>(frozen.getWorkflow(), scheduler, outputHandler,
+                                              new ConcurrentHashMap<>(frozen.getNodeStatuses()));
+        thawed._updateReadiness();
+        thawed._registerCallbacks();
+        return thawed;
     }
 
     /**
@@ -104,28 +251,44 @@ public class Execution<T extends Task>
     }
 
     /**
-     * Returns a read-only view of node states.
-     * State transitions are reflected in the returned map as they occur.
+     * Returns a live, read-only view of node statuses.
      */
-    public Map<WorkflowNode<T>, NodeState> getNodeStates()
+    public Map<WorkflowNode<T>, NodeStatus> getNodeStatuses()
     {
-        return Collections.unmodifiableMap(m_nodeStates);
+        return Collections.unmodifiableMap(m_nodeStatuses);
+    }
+
+    /**
+     * Returns whether this execution will shut down
+     * when any task fails to execute.
+     */
+    public boolean isShutdownOnFailure()
+    {
+        return m_shutdownOnFailure;
+    }
+
+    /**
+     * Sets whether this execution will shut down
+     * when any task fails to execute.
+     */
+    public void setShutdownOnFailure(boolean shutdownOnFailure)
+    {
+        m_shutdownOnFailure = shutdownOnFailure;
     }
 
     /**
      * Returns a snapshot of this execution.
      *
-     * @throws IllegalStateException if this execution is currently running
+     * <p>The returned snapshot is guaranteed to be consistent. However, it can
+     * quickly become out-of-date if the execution is running, or if any tasks
+     * have been scheduled but not completed.</p>
      */
     public FrozenExecution<T> freeze()
     {
-        if (!m_lock.tryLock())
-        {
-            throw new IllegalStateException("Can't freeze an Execution that's running");
-        }
+        m_lock.lock();
         try
         {
-            return FrozenExecution.of(m_workflow, m_nodeStates);
+            return FrozenExecution.of(m_workflow, m_nodeStatuses);
         }
         finally
         {
@@ -135,52 +298,99 @@ public class Execution<T extends Task>
 
     /**
      * Schedules tasks in a loop and waits for them to finish. Scheduling
-     * continues until every task with satisfied dependencies has run, or
-     * until the associated {@link ExecutionStrategy} indicates it should stop.
-     * The default execution strategy stops scheduling tasks if any task fails.
+     * continues until every task with satisfied dependencies has run or the
+     * execution is interrupted. If a scheduled task fails, its output is
+     * removed.
      *
-     * @throws IllegalStateException if this execution is currently running
-     * @throws IOException if output cannot be deleted after a failure
-     * @throws InterruptedException if interrupted while waiting
+     * @throws IllegalStateException if this execution is already running
      * @throws ExecutionException if a task fails
+     * @throws InterruptedException if interrupted while waiting
      */
-    public void run() throws IOException, InterruptedException, ExecutionException
+    public void run() throws ExecutionException, InterruptedException
     {
-        if (!m_lock.tryLock())
-        {
-            throw new IllegalStateException("Execution is already running");
-        }
+        m_lock.lock();
         try
         {
-            m_exceptions.clear();
-            m_state = ExecutionState.RUNNING;
-            _submitReadyNodes();
-
-            while (m_nodesByState.get(NodeState.SUBMITTED).size() > 0)
+            if (m_driverThread != null)
             {
-                if (!m_structureNodeQueue.isEmpty())
-                {
-                    _completeNode(m_structureNodeQueue.remove());
-                }
-                else
-                {
-                    TaskResult<T> result;
-                    try
-                    {
-                        result = m_completionService.take();
-                    }
-                    catch (InterruptedException e)
-                    {
-                        m_exceptions.add(e);
-                        _maybeThrow();
-                        throw e;
-                    }
-                    _handleResult(result);
-                }
+                throw new IllegalStateException("Execution is already running");
             }
+            m_driverThread = Thread.currentThread();
+            m_state = ExecutionState.RUNNING;
 
-            m_state = ExecutionState.IDLE;
-            _maybeThrow();
+            try
+            {
+                _submitReadyNodes();
+
+                while (!m_nodesByState.get(NodeState.SCHEDULED).isEmpty()
+                        || !m_structureNodeQueue.isEmpty()
+                        || !m_taskNodeQueue.isEmpty())
+                {
+                    // Check for a queued structure node
+                    WorkflowNode<T> node = m_structureNodeQueue.poll();
+                    if (node != null)
+                    {
+                        _updateDependentReadiness(node);
+                        _submitReadyNodes();
+                        continue;  // In case this was the last node
+                    }
+
+                    // Wait for a queued task node
+                    TaskNodeCompletion<T> completion;
+                    while ((completion = m_taskNodeQueue.poll()) == null)
+                    {
+                        try
+                        {
+                            m_taskNodeAvailable.await();
+                        }
+                        catch (InterruptedException e)
+                        {
+                            m_exceptions.add(e);
+                            _maybeThrow();
+                            throw e;
+                        }
+                    }
+
+                    node = completion.getNode();
+                    if (m_nodeStatuses.get(node).getState().equals(NodeState.SUCCEEDED))
+                    {
+                        _updateDependentReadiness(node);
+                        _submitReadyNodes();
+                    }
+                    else
+                    {
+                        if (m_shutdownOnFailure)
+                        {
+                            m_state = ExecutionState.SHUTDOWN;
+                        }
+
+                        m_exceptions.add(completion.newExecutionException());
+
+                        try
+                        {
+                            m_outputHandler.removeOutput(ImmutableSet.of(node),
+                                                         OutputRemovalReason.EXECUTION_FAILED);
+                        }
+                        catch (IOException e)
+                        {
+                            m_exceptions.add(e);
+                        }
+                    }
+                }
+
+                _maybeThrow();
+            }
+            catch (Exception e)
+            {
+                m_exceptions.add(e);
+                _maybeThrow();
+                throw e;
+            }
+            finally
+            {
+                m_state = ExecutionState.IDLE;
+                m_driverThread = null;
+            }
         }
         finally
         {
@@ -188,147 +398,295 @@ public class Execution<T extends Task>
         }
     }
 
-    private void _handleResult(TaskResult<T> result)
+    /**
+     * Shuts down this execution and returns immediately. Scheduled tasks will
+     * continue to run, no new tasks will be scheduled. The current call to
+     * {@link #run()} will return when all scheduled tasks have completed.
+     *
+     * <p>If it does not coincide with a call to {@link #run()}, this method
+     * has no effect.</p>
+     */
+    public void shutdown()
     {
-        TaskNode<T> node = result.getNode();
-        TaskCompletionBehavior behavior = m_strategy.afterTask(result);
-        switch (behavior)
+        m_lock.lock();
+        try
         {
-            case FORCE_SUCCESS:
-                _completeNode(node);
-                break;
-
-            case FORCE_FAILURE:
-                m_state = ExecutionState.HALTING;
-                _failNode(node, new ExecutionException("Forced failure for node " + node, result.getFailureCause()));
-                break;
-
-            case HALT:
-                m_state = ExecutionState.HALTING;
-                // Fall through
-            case DEFAULT:
-                if (!result.isSuccessful())
-                {
-                    m_state = ExecutionState.HALTING;
-                }
-                // Fall through
-            case CONTINUE:
-                if (result.isSuccessful())
-                {
-                    _completeNode(node);
-                }
-                else
-                {
-                    _failNode(node, new ExecutionException(result.getFailureCause()));
-                }
-                break;
-
-            case RERUN:
-                _removeOutputs(node, OutputRemovalReason.RERUN_REQUESTED);
-                _submitNode(node);
-                break;
-
-            default:
-                throw new RuntimeException("Unhandled TaskCompletionBehavior " + behavior);
+            if (m_state.equals(ExecutionState.RUNNING))
+            {
+                m_state = ExecutionState.SHUTDOWN;
+            }
+        }
+        finally
+        {
+            m_lock.unlock();
         }
     }
 
-    private void _completeNode(WorkflowNode<T> node)
+    /**
+     * Interrupts this execution and returns immediately. The current call to
+     * {@link #run()} should return shortly afterwards, possibly with an
+     * {@link InterruptedException}. Scheduled tasks may continue to run.
+     *
+     * <p>If it does not coincide with a call to {@link #run()}, this method
+     * has no effect.</p>
+     */
+    public void interrupt()
     {
-        _updateState(node, NodeState.SUCCEEDED);
+        m_lock.lock();
+        try
+        {
+            if (m_driverThread != null)
+            {
+                m_driverThread.interrupt();
+            }
+        }
+        finally
+        {
+            m_lock.unlock();
+        }
+    }
 
-        node.getDependents().stream()
-                .filter(dependent -> m_nodeStates.get(dependent) == NodeState.NOT_READY)
+    @GuardedBy("m_lock")
+    private void _registerCallbacks() throws InvalidTokenException
+    {
+        for (WorkflowNode<T> node : m_nodesByState.get(NodeState.SCHEDULED))
+        {
+            if (node.hasTask())
+            {
+                TaskNode<T> taskNode = (TaskNode<T>) node;
+                Optional<ScheduledTaskToken> token = m_nodeStatuses.get(node).getToken();
+                assert token.isPresent() : "Missing token";
+                m_scheduler.registerCallback(token.get(), new WeakCallback(new QueueingCallback(taskNode)));
+            }
+        }
+    }
+
+    @GuardedBy("m_lock")
+    private void _updateReadiness()
+    {
+        _updateReadiness(m_nodesByState.get(NodeState.NOT_READY).stream());
+    }
+
+    @GuardedBy("m_lock")
+    private void _updateDependentReadiness(WorkflowNode<T> node)
+    {
+        _updateReadiness(
+                node.getDependents().stream()
+                        .filter(dependent -> m_nodeStatuses.get(dependent).getState().equals(NodeState.NOT_READY))
+        );
+    }
+
+    @GuardedBy("m_lock")
+    private void _updateReadiness(Stream<WorkflowNode<T>> potentiallyReadyNodes)
+    {
+        potentiallyReadyNodes
                 .filter(dependent -> dependent.getDependencies().stream()
-                        .allMatch(dependency -> m_nodeStates.get(dependency).satisfiesDependency()))
-                .forEach(dependent -> _updateState(dependent, NodeState.READY));
-
-        _submitReadyNodes();
+                        .allMatch(dependency -> m_nodeStatuses.get(dependency).getState().satisfiesDependency()))
+                .forEach(dependent -> _updateStatus(dependent, NodeState.READY));
     }
 
-    private void _failNode(TaskNode<T> node, ExecutionException failureCause)
-    {
-        _updateState(node, NodeState.FAILED);
-
-        m_exceptions.add(failureCause);
-        _removeOutputs(node, OutputRemovalReason.EXECUTION_FAILED);
-    }
-
-    private void _submitNode(WorkflowNode<T> node)
-    {
-        _updateState(node, NodeState.SUBMITTED);
-        m_strategy.beforeNode(node);
-        if (node.hasTask())
-        {
-            m_completionService.submit((TaskNode<T>) node);
-        }
-        else
-        {
-            m_structureNodeQueue.add(node);
-        }
-    }
-
+    @GuardedBy("m_lock")
     private void _submitReadyNodes()
     {
         Set<WorkflowNode<T>> readyNodes = m_nodesByState.get(NodeState.READY);
         while (m_state == ExecutionState.RUNNING && !readyNodes.isEmpty())
         {
             Iterator<WorkflowNode<T>> iter = readyNodes.iterator();
-            WorkflowNode<T> next = iter.next();
+            WorkflowNode<T> node = iter.next();
             iter.remove();
-            _submitNode(next);
-        }
-    }
 
-    private void _removeOutputs(TaskNode<T> node, OutputRemovalReason reason)
-    {
-        if (m_strategy.beforeTaskOutputRemoval(node, reason))
-        {
-            for (Output output : node.getTask().getOutputs())
+            if (node.hasTask())
             {
-                if (m_strategy.beforeSingleOutputRemoval(node, output, reason))
+                // We want to store the token from the m_taskExecutor.submit() call in the node's
+                // state object. However, in the case of a direct executor, submit() will do the
+                // actual task execution and invoke a completion callback before we get a token.
+                // To begin with, set the state to SCHEDULED with no token.
+                _updateStatus(node, NodeState.SCHEDULED);
+
+                // Try submitting the node. If the task executor implementation blows up or gives
+                // us a null token, mark the node as FAILED: we don't want SCHEDULED nodes with
+                // tasks but no tokens piling up on us. We could also remove task output but it's
+                // really the task executor that failed, not the task.
+                ScheduledTaskToken token;
+                try
                 {
-                    try
-                    {
-                        output.delete();
-                    }
-                    catch (IOException e)
-                    {
-                        m_exceptions.add(e);
-                    }
+                    token = m_scheduler.submit(node.getTask(),
+                                               new WeakCallback(new QueueingCallback((TaskNode<T>) node)));
+                    Preconditions.checkNotNull(token, "Null token");
                 }
+                catch (Exception e)
+                {
+                    _updateStatus(node, NodeState.FAILED);
+                    throw e;
+                }
+
+                // Only update state if submit() didn't do it for us
+                if (m_nodeStatuses.get(node).getState().equals(NodeState.SCHEDULED))
+                {
+                    _updateStatus(node, NodeStatus.scheduledWithToken(token));
+                }
+            }
+            else
+            {
+                _updateStatus(node, NodeState.SUCCEEDED);
+                m_structureNodeQueue.add((StructureNode<T>) node);
             }
         }
     }
 
-    private void _updateState(WorkflowNode<T> node, NodeState state)
+    // @GuardedBy("m_lock")
+    private void _updateStatus(WorkflowNode<T> node, NodeState state)
     {
-        m_nodeStates.put(node, state);
-        m_nodesByState.entrySet().stream()
-                .<Consumer<WorkflowNode<T>>>map(e -> e.getKey() == state ? e.getValue()::add : e.getValue()::remove)
-                .forEach(c -> c.accept(node));
+        _updateStatus(node, NodeStatus.withoutToken(state));
+    }
+
+    // @GuardedBy("m_lock")
+    private void _updateStatus(WorkflowNode<T> node, NodeStatus status)
+    {
+        m_nodeStatuses.put(node, status);
+
+        for (Entry<NodeState, Set<WorkflowNode<T>>> e : m_nodesByState.entrySet())
+        {
+            if (e.getKey().equals(status.getState()))
+            {
+                e.getValue().add(node);
+            }
+            else
+            {
+                e.getValue().remove(node);
+            }
+        }
     }
 
     /**
      * Throws the most important exception seen so far, if any.
+     * Clears the list of exceptions.
      */
-    private void _maybeThrow() throws IOException, InterruptedException, ExecutionException
+    @GuardedBy("m_lock")
+    private void _maybeThrow() throws ExecutionException, InterruptedException
     {
-        // Throw ExecutionExceptions, followed by IOExceptions, followed by InterruptedExceptions
-        Iterator<Exception> iter = m_exceptions.stream()
-                .sorted(Comparator.comparing(InterruptedException.class::isInstance)
-                                .thenComparing(IOException.class::isInstance)
-                                .thenComparing(ExecutionException.class::isInstance))
-                .iterator();
+        // Throw unchecked exceptions first, followed by ExecutionException, IOException, InterruptedException
+        // If we have an IOException, we should also have an ExecutionException
+        m_exceptions.sort(Comparator.comparing(InterruptedException.class::isInstance)
+                                  .thenComparing(IOException.class::isInstance)
+                                  .thenComparing(ExecutionException.class::isInstance));
 
+        Iterator<Exception> iter = m_exceptions.iterator();
         if (iter.hasNext())
         {
             Exception toThrow = iter.next();
             iter.forEachRemaining(toThrow::addSuppressed);
-            Throwables.throwIfInstanceOf(toThrow, IOException.class);
+            m_exceptions.clear();
+
             Throwables.throwIfInstanceOf(toThrow, InterruptedException.class);
             Throwables.throwIfInstanceOf(toThrow, ExecutionException.class);
-            throw new AssertionError("Unexpected exception type", toThrow);
+            Throwables.throwIfUnchecked(toThrow);
+            throw new AssertionError("Unexpected checked exception", toThrow);
+        }
+    }
+
+    /**
+     * Record of a task execution finishing (successfully or otherwise).
+     * References the corresponding node and an optional failure cause.
+     * The lack of a failure cause does not indicate success.
+     */
+    private static class TaskNodeCompletion<U extends Task>
+    {
+        private final TaskNode<U> m_node;
+
+        @Nullable
+        private final String m_message;
+
+        @Nullable
+        private final Throwable m_failureCause;
+
+        public TaskNodeCompletion(TaskNode<U> node, @Nullable String message, @Nullable Throwable failureCause)
+        {
+            m_node = node;
+            m_message = message;
+            m_failureCause = failureCause;
+        }
+
+        public TaskNode<U> getNode()
+        {
+            return m_node;
+        }
+
+        public ExecutionException newExecutionException()
+        {
+            StringBuilder sb = new StringBuilder("Task for node ").append(m_node.getKey()).append(" failed");
+
+            if (m_message != null)
+            {
+                sb.append(": ").append(m_message);
+            }
+
+            return new ExecutionException(sb.toString(), m_failureCause);
+        }
+    }
+
+    /**
+     * Task completion callback that updates the state of the
+     * corresponding node and wakes up the thread driving execution.
+     */
+    private class QueueingCallback implements TaskCompletionCallback
+    {
+        private final TaskNode<T> m_node;
+
+        public QueueingCallback(TaskNode<T> node)
+        {
+            m_node = node;
+        }
+
+        @Override
+        public void reportSuccess()
+        {
+            queueResult(new TaskNodeCompletion<>(m_node, null, null), NodeState.SUCCEEDED);
+        }
+
+        @Override
+        public void reportFailure()
+        {
+            queueResult(new TaskNodeCompletion<>(m_node, null, null), NodeState.FAILED);
+        }
+
+        @Override
+        public void reportFailure(String message)
+        {
+            queueResult(new TaskNodeCompletion<>(m_node, Preconditions.checkNotNull(message), null), NodeState.FAILED);
+        }
+
+        @Override
+        public void reportFailure(String message, Throwable cause)
+        {
+            queueResult(new TaskNodeCompletion<>(m_node,
+                                                 Preconditions.checkNotNull(message),
+                                                 Preconditions.checkNotNull(cause)),
+                        NodeState.FAILED);
+        }
+
+        @Override
+        public void reportFailure(Throwable cause)
+        {
+            queueResult(new TaskNodeCompletion<>(m_node, null, Preconditions.checkNotNull(cause)), NodeState.FAILED);
+        }
+
+        private void queueResult(TaskNodeCompletion<T> result, NodeState state)
+        {
+            m_lock.lock();
+            try
+            {
+                if (m_nodeStatuses.get(m_node).getState().equals(NodeState.SCHEDULED))
+                {
+                    _updateStatus(m_node, state);
+                    m_taskNodeQueue.add(result);
+                    m_taskNodeAvailable.signal();
+                }
+            }
+            finally
+            {
+                m_lock.unlock();
+            }
         }
     }
 }
