@@ -18,7 +18,7 @@ import static com.google.common.collect.Maps.toImmutableEnumMap;
  * The status of a node within a particular execution.
  * Includes a state value and information about task scheduling.
  */
-public abstract class NodeStatus
+public abstract class NodeStatus implements Serializable
 {
     /**
      * Returns the state of the associated node.

@@ -7,7 +7,9 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Iterator;
+import java.util.stream.Stream;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSetMultimap;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -85,6 +87,40 @@ public class SerializationTest
         compareWorkflowSubsets(reconstitute(workflowSubset), workflowSubset);
     }
 
+    @DataProvider
+    public Object[][] testSerializeFrozenExecutionDataSet()
+    {
+        BuilderAssembler<Task, TaskNode.Builder<Task>> builderAssembler = BuilderAssembler.usingTasks(NoOpTask::new);
+        Workflow<Task> workflow = Workflow.create(builderAssembler.builderListTestConfig1());
+        FrozenExecution<Task> execution = FrozenExecution.of(workflow, ImmutableMap.of(
+                workflow.getNodes().get("0"), NodeStatus.withoutToken(NodeState.IRRELEVANT),
+                workflow.getNodes().get("1"), NodeStatus.withoutToken(NodeState.READY),
+                workflow.getNodes().get("2"), NodeStatus.withoutToken(NodeState.NOT_READY)
+        ));
+        return new Object[][] { new Object[] { execution } };
+    }
+
+    @Test(dataProvider = "testSerializeFrozenExecutionDataSet")
+    public <T extends Task> void testSerializeFrozenExecution(FrozenExecution<T> execution)
+    {
+        compareFrozenExecutions(reconstitute(execution), execution);
+    }
+
+    @DataProvider
+    public Object[][] testSerializeNodeStatusDataSet()
+    {
+        return Stream.concat(Stream.of(NodeState.values()).map(NodeStatus::withoutToken),
+                             Stream.of(NodeStatus.scheduledWithToken(new TestToken(0))))
+                .map(status -> new Object[] { status })
+                .toArray(Object[][]::new);
+    }
+
+    @Test(dataProvider = "testSerializeNodeStatusDataSet")
+    public void testSerializeNodeStatus(NodeStatus status)
+    {
+        compareNodeStatuses(reconstitute(status), status);
+    }
+
     private <T extends Task> void compareWorkflowNodes(WorkflowNode<T> serialized, WorkflowNode<T> original)
     {
         assertThat(serialized.getKey()).isEqualTo(original.getKey());
@@ -118,9 +154,34 @@ public class SerializationTest
 
     private <T extends Task> void compareWorkflowSubsets(WorkflowSubset<T> serialized, WorkflowSubset<T> original)
     {
+        compareWorkflows(serialized.getWorkflow(), original.getWorkflow());
         assertThat(serialized.getNodes().keySet()).containsExactlyElementsIn(original.getNodes().keySet());
         serialized.getNodes().forEach((key, node) -> assertThat(node.getKey()).isEqualTo(key));
+    }
+
+    private <T extends Task> void compareFrozenExecutions(FrozenExecution<T> serialized, FrozenExecution<T> original)
+    {
         compareWorkflows(serialized.getWorkflow(), original.getWorkflow());
+        assertThat(serialized.getNodeStatuses().keySet())
+                .comparingElementsUsing(new NodeKeyCorrespondence<T>())
+                .containsExactlyElementsIn(original.getNodeStatuses().keySet());
+        original.getNodeStatuses().forEach((node, status) -> compareNodeStatuses(
+                serialized.getNodeStatuses().get(serialized.getWorkflow().getNodes().get(node.getKey())),
+                status
+        ));
+    }
+
+    private void compareNodeStatuses(NodeStatus serialized, NodeStatus original)
+    {
+        assertThat(serialized.getToken()).isEqualTo(original.getToken());
+        if (!original.getToken().isPresent())
+        {
+            assertThat(serialized).isSameAs(original);
+        }
+        else
+        {
+            assertThat(serialized.getState()).isEqualTo(original.getState());
+        }
     }
 
     private <T extends Serializable> T reconstitute(T object)
