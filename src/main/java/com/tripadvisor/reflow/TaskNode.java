@@ -8,6 +8,7 @@ import java.io.ObjectStreamException;
 import java.util.Set;
 
 import com.google.common.base.Preconditions;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 /**
  * A node with an associated task.
@@ -75,6 +76,7 @@ public class TaskNode<T extends Task> extends WorkflowNode<T>
         /**
          * {@inheritDoc}
          */
+        @CanIgnoreReturnValue
         @Override
         public Builder<U> setKey(@Nullable String key)
         {
@@ -84,6 +86,7 @@ public class TaskNode<T extends Task> extends WorkflowNode<T>
         /**
          * {@inheritDoc}
          */
+        @CanIgnoreReturnValue
         @Override
         public Builder<U> setDependencies(Set<WorkflowNode.Builder<U>> dependencies)
         {
@@ -104,6 +107,7 @@ public class TaskNode<T extends Task> extends WorkflowNode<T>
          * Sets the task that will be used when building nodes.
          * The task must be set before constructing a workflow.
          */
+        @CanIgnoreReturnValue
         public Builder<U> setTask(U task)
         {
             m_task = task;

@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 /**
  * A node in a workflow, possibly referencing a task.
@@ -145,6 +146,7 @@ public abstract class WorkflowNode<T extends Task> implements Serializable
          * {@code '-'} and underscore {@code '_'}. Keys may not start or end
          * with a hyphen or underscore.</p>
          */
+        @CanIgnoreReturnValue
         public Builder<U> setKey(@Nullable String key)
         {
             m_key = key;
@@ -177,6 +179,7 @@ public abstract class WorkflowNode<T extends Task> implements Serializable
          * Sets the dependencies that will be used when building nodes.
          * The value {@code null} will be translated to an empty set.
          */
+        @CanIgnoreReturnValue
         public Builder<U> setDependencies(Set<Builder<U>> dependencies)
         {
             m_dependencies = dependencies;
@@ -186,6 +189,7 @@ public abstract class WorkflowNode<T extends Task> implements Serializable
         /**
          * Adds dependencies that will be used when building nodes.
          */
+        @CanIgnoreReturnValue
         @SafeVarargs
         public final Builder<U> addDependencies(Builder<U> dependency, Builder<U>... moreDependencies)
         {

@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 /**
  * A helper class for building workflows in a fluent style.
@@ -191,6 +192,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     @SafeVarargs
     public final BuilderChain<T> andThenTasks(T task, T... moreTasks)
     {
@@ -203,6 +205,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     public BuilderChain<T> andThenTasks(Collection<? extends T> tasks)
     {
         return tasks.isEmpty() ? _andThenEmptySegment() : _andThen(tasks.stream().map(TaskNode::builder));
@@ -214,6 +217,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     @SafeVarargs
     public final BuilderChain<T> andThen(WorkflowNode.Builder<T> builder, WorkflowNode.Builder<T>... moreBuilders)
     {
@@ -226,6 +230,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     public BuilderChain<T> andThen(Collection<WorkflowNode.Builder<T>> builders)
     {
         return builders.isEmpty() ? _andThenEmptySegment() : _andThen(builders.stream());
@@ -250,6 +255,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     @SafeVarargs
     public final BuilderChain<T> andThenChains(BuilderChain<T> chain, BuilderChain<T>... moreChains)
     {
@@ -262,6 +268,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     public BuilderChain<T> andThenChains(Collection<BuilderChain<T>> chains)
     {
         return chains.isEmpty() ? _andThenEmptySegment() : _andThenChains(chains.stream());
@@ -296,6 +303,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     public BuilderChain<T> setHeadKey(@Nullable String key)
     {
         m_head.setKey(key);
@@ -307,6 +315,7 @@ public class BuilderChain<T extends Task>
      *
      * @return this chain, mutated
      */
+    @CanIgnoreReturnValue
     public BuilderChain<T> setTailKey(@Nullable String key)
     {
         m_tail.setKey(key);

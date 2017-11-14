@@ -4,6 +4,8 @@ import javax.annotation.Nullable;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+
 /**
  * A node that has no associated task and serves only to link other nodes.
  */
@@ -45,6 +47,7 @@ public class StructureNode<T extends Task> extends WorkflowNode<T>
         /**
          * {@inheritDoc}
          */
+        @CanIgnoreReturnValue
         @Override
         public Builder<U> setKey(@Nullable String key)
         {
@@ -54,6 +57,7 @@ public class StructureNode<T extends Task> extends WorkflowNode<T>
         /**
          * {@inheritDoc}
          */
+        @CanIgnoreReturnValue
         @Override
         public Builder<U> setDependencies(Set<WorkflowNode.Builder<U>> dependencies)
         {

@@ -213,6 +213,6 @@ public final class WorkflowTest
                   "\\[a-zA-Z0-9\\]\\(\\?:\\[a-zA-Z0-9_-\\]\\{0,254\\}\\[a-zA-Z0-9\\]\\)\\?$")
     public void testInvalidKey(String key)
     {
-        Workflow.create(ImmutableList.of(TaskNode.builder(key, new NoOpTask())));
+        Workflow<NoOpTask> unused = Workflow.create(ImmutableList.of(TaskNode.builder(key, new NoOpTask())));
     }
 }
