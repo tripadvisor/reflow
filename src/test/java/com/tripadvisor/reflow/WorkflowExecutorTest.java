@@ -2,7 +2,6 @@ package com.tripadvisor.reflow;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -35,12 +34,12 @@ public final class WorkflowExecutorTest
         void accept(Executor executor) throws IOException, InterruptedException, ExecutionException;
     }
 
-    private void _withDirectExecutor(ExecutorConsumer test) throws IOException, InterruptedException, ExecutionException
+    private void testWithDirectExecutor(ExecutorConsumer test) throws IOException, InterruptedException, ExecutionException
     {
         test.accept(MoreExecutors.directExecutor());
     }
 
-    private void _withThreadPool(ExecutorConsumer test) throws IOException, InterruptedException, ExecutionException
+    private void testWithThreadPool(ExecutorConsumer test) throws IOException, InterruptedException, ExecutionException
     {
         ExecutorService es = Executors.newCachedThreadPool();
         test.accept(es);
@@ -55,16 +54,16 @@ public final class WorkflowExecutorTest
     @Test
     public void testRunRerun() throws IOException, InterruptedException, ExecutionException
     {
-        _withDirectExecutor(this::_testRunRerun);
+        testWithDirectExecutor(this::testRunRerun);
     }
 
     @Test
     public void testRunRerunConcurrent() throws IOException, InterruptedException, ExecutionException
     {
-        _withThreadPool(this::_testRunRerun);
+        testWithThreadPool(this::testRunRerun);
     }
 
-    private void _testRunRerun(Executor executor) throws IOException, InterruptedException, ExecutionException
+    private void testRunRerun(Executor executor) throws IOException, InterruptedException, ExecutionException
     {
         // First, assemble a test graph with mock runnable and output objects.
         // We're using this eight-node graph:
@@ -79,9 +78,8 @@ public final class WorkflowExecutorTest
                 () -> TestTask.succeeding(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
         );
 
-        List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
-        Workflow<TestTask> graph = Workflow.create(template);
-        Target<TestTask> upTo2 = graph.stoppingAfterKeys("2");
+        Workflow<TestTask> workflow = Workflow.create(builderAssembler.builderListTestConfig2());
+        Target<TestTask> upTo2 = workflow.stoppingAfterKeys("2");
 
         TaskScheduler<Runnable> scheduler = LocalTaskScheduler.create(executor);
         OutputHandler outputHandler = OutputHandler.create();
@@ -90,15 +88,15 @@ public final class WorkflowExecutorTest
         Instant stage1start = Instant.now();
         outputMutabilityFlag.set(true);
 
-        Execution.newExecution(graph, scheduler, outputHandler).run();
+        Execution.newExecution(workflow, scheduler, outputHandler).run();
 
         outputMutabilityFlag.set(false);
         Instant stage1finish = Instant.now();
         Range<Instant> stage1 = Range.closed(stage1start, stage1finish);
 
-        graph.getNodes().values().forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        _checkDependenciesFrom(graph.getNodes().get("4"));
-        _checkDependenciesFrom(graph.getNodes().get("7"));
+        workflow.getNodes().values().forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
+        checkDependenciesFrom(workflow.getNodes().get("4"));
+        checkDependenciesFrom(workflow.getNodes().get("7"));
 
         // Rerun node 2 and dependencies - nothing else should be executed
         Instant stage2start = Instant.now();
@@ -111,68 +109,68 @@ public final class WorkflowExecutorTest
         Instant stage2finish = Instant.now();
         Range<Instant> stage2 = Range.closed(stage2start, stage2finish);
 
-        Stream.of("3", "4", "5", "6", "7").map(graph.getNodes()::get)
+        Stream.of("3", "4", "5", "6", "7").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        Stream.of("0", "1", "2").map(graph.getNodes()::get)
+        Stream.of("0", "1", "2").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage2));
 
         // Run everything - dependents of dependencies of node 2 should be executed
         Instant stage3start = Instant.now();
         outputMutabilityFlag.set(true);
 
-        Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
+        Execution.newExecutionFromExistingOutput(workflow, scheduler, outputHandler).run();
 
         outputMutabilityFlag.set(false);
         Instant stage3finish = Instant.now();
         Range<Instant> stage3 = Range.closed(stage3start, stage3finish);
 
-        Stream.of("5").map(graph.getNodes()::get)
+        Stream.of("5").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        Stream.of("0", "1", "2").map(graph.getNodes()::get)
+        Stream.of("0", "1", "2").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage2));
-        Stream.of("3", "4", "6", "7").map(graph.getNodes()::get)
+        Stream.of("3", "4", "6", "7").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage3));
-        _checkDependenciesFrom(graph.getNodes().get("4"));
+        checkDependenciesFrom(workflow.getNodes().get("4"));
 
         // Manually delete output of node 2, then run everything - only dependents of node 2 should be executed
         Instant stage4start = Instant.now();
         outputMutabilityFlag.set(true);
 
-        for (Output output : graph.getNodes().get("2").getTask().getOutputs())
+        for (Output output : workflow.getNodes().get("2").getTask().getOutputs())
         {
             output.delete();
         }
-        Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
+        Execution.newExecutionFromExistingOutput(workflow, scheduler, outputHandler).run();
 
         outputMutabilityFlag.set(false);
         Instant stage4finish = Instant.now();
         Range<Instant> stage4 = Range.closed(stage4start, stage4finish);
 
-        Stream.of("5").map(graph.getNodes()::get)
+        Stream.of("5").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        Stream.of("0", "1").map(graph.getNodes()::get)
+        Stream.of("0", "1").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage2));
-        Stream.of("6", "7").map(graph.getNodes()::get)
+        Stream.of("6", "7").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage3));
-        Stream.of("2", "3", "4").map(graph.getNodes()::get)
+        Stream.of("2", "3", "4").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage4));
-        _checkDependenciesFrom(graph.getNodes().get("4"));
-        _checkDependenciesFrom(graph.getNodes().get("7"));
+        checkDependenciesFrom(workflow.getNodes().get("4"));
+        checkDependenciesFrom(workflow.getNodes().get("7"));
     }
 
     @Test
     public void testTaskExceptionHandling() throws IOException, InterruptedException, ExecutionException
     {
-        _withDirectExecutor(this::_testTaskExceptionHandling);
+        testWithDirectExecutor(this::testTaskExceptionHandling);
     }
 
     @Test
     public void testTaskExceptionHandlingConcurrent() throws IOException, InterruptedException, ExecutionException
     {
-        _withThreadPool(this::_testTaskExceptionHandling);
+        testWithThreadPool(this::testTaskExceptionHandling);
     }
 
-    private void _testTaskExceptionHandling(Executor executor) throws IOException, InterruptedException
+    private void testTaskExceptionHandling(Executor executor) throws IOException, InterruptedException
     {
         // Same eight-node graph as above, except node 2 will throw an exception when run.
         //
@@ -188,8 +186,7 @@ public final class WorkflowExecutorTest
                         TestTask.succeeding(random.nextInt(MAX_RUNNABLE_DURATION_MS), outputMutabilityFlag)
         );
 
-        List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
-        Workflow<TestTask> graph = Workflow.create(template);
+        Workflow<TestTask> workflow = Workflow.create(builderAssembler.builderListTestConfig2());
 
         TaskScheduler<Runnable> scheduler = LocalTaskScheduler.create(executor);
         OutputHandler outputHandler = OutputHandler.create();
@@ -204,7 +201,7 @@ public final class WorkflowExecutorTest
 
         try
         {
-            Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
+            Execution.newExecutionFromExistingOutput(workflow, scheduler, outputHandler).run();
             fail("Exception not propagated");
         }
         catch (ExecutionException e)
@@ -216,26 +213,26 @@ public final class WorkflowExecutorTest
         Instant stage1finish = Instant.now();
         Range<Instant> stage1 = Range.closed(stage1start, stage1finish);
 
-        Stream.of("0", "1").map(graph.getNodes()::get)
+        Stream.of("0", "1").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        Stream.of("2", "3", "4").map(graph.getNodes()::get)
+        Stream.of("2", "3", "4").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasNoOutput());
-        _checkDependenciesFrom(graph.getNodes().get("7"));
+        checkDependenciesFrom(workflow.getNodes().get("7"));
     }
 
     @Test
     public void testOutputExceptionHandling() throws IOException, InterruptedException, ExecutionException
     {
-        _withDirectExecutor(this::_testOutputExceptionHandling);
+        testWithDirectExecutor(this::testOutputExceptionHandling);
     }
 
     @Test
     public void testOutputExceptionHandlingConcurrent() throws IOException, InterruptedException, ExecutionException
     {
-        _withThreadPool(this::_testOutputExceptionHandling);
+        testWithThreadPool(this::testOutputExceptionHandling);
     }
 
-    private void _testOutputExceptionHandling(Executor executor) throws IOException, InterruptedException
+    private void testOutputExceptionHandling(Executor executor) throws IOException, InterruptedException
     {
         // Same eight-node graph as above, except node 2 will throw an exception
         // when run or when outputs are deleted. Node run durations are set
@@ -255,8 +252,7 @@ public final class WorkflowExecutorTest
                         TestTask.succeeding(durations[i], outputMutabilityFlag)
         );
 
-        List<Builder<TestTask>> template = builderAssembler.builderListTestConfig2();
-        Workflow<TestTask> graph = Workflow.create(template);
+        Workflow<TestTask> workflow = Workflow.create(builderAssembler.builderListTestConfig2());
 
         TaskScheduler<Runnable> scheduler = LocalTaskScheduler.create(executor);
         OutputHandler outputHandler = OutputHandler.create();
@@ -271,7 +267,7 @@ public final class WorkflowExecutorTest
 
         try
         {
-            Execution.newExecutionFromExistingOutput(graph, scheduler, outputHandler).run();
+            Execution.newExecutionFromExistingOutput(workflow, scheduler, outputHandler).run();
             fail("Exception not propagated");
         }
         catch (ExecutionException e)
@@ -288,23 +284,23 @@ public final class WorkflowExecutorTest
         Instant stage1finish = Instant.now();
         Range<Instant> stage1 = Range.closed(stage1start, stage1finish);
 
-        Stream.of("0", "1").map(graph.getNodes()::get)
+        Stream.of("0", "1").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasAllOutputWithin(stage1));
-        Stream.of("2", "3", "4").map(graph.getNodes()::get)
+        Stream.of("2", "3", "4").map(workflow.getNodes()::get)
                 .forEach(node -> assertThat(node.getTask()).hasNoOutput());
-        _checkDependenciesFrom(graph.getNodes().get("7"));
+        checkDependenciesFrom(workflow.getNodes().get("7"));
     }
 
     /**
      * Starting at the given node, walks down the dependency tree and checks
      * that no dependency ran later than it should have.
      */
-    private void _checkDependenciesFrom(WorkflowNode<TestTask> node)
+    private void checkDependenciesFrom(WorkflowNode<TestTask> node)
     {
-        _checkDependenciesFromHelper(node, Instant.MAX);
+        checkDependenciesFromHelper(node, Instant.MAX);
     }
 
-    private void _checkDependenciesFromHelper(WorkflowNode<TestTask> node, Instant maxTimestamp)
+    private void checkDependenciesFromHelper(WorkflowNode<TestTask> node, Instant maxTimestamp)
     {
         Instant maxDependencyTimestamp = maxTimestamp;
 
@@ -325,7 +321,7 @@ public final class WorkflowExecutorTest
 
         for (WorkflowNode<TestTask> dependency : node.getDependencies())
         {
-            _checkDependenciesFromHelper(dependency, maxDependencyTimestamp);
+            checkDependenciesFromHelper(dependency, maxDependencyTimestamp);
         }
     }
 }

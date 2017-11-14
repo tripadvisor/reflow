@@ -92,7 +92,7 @@ public class BuilderChain<T extends Task>
     {}
 
     @SafeVarargs
-    private static <U> Stream<U> _stream(U first, U... rest)
+    private static <U> Stream<U> stream(U first, U... rest)
     {
         return Lists.asList(first, rest).stream();
     }
@@ -104,7 +104,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public static <U extends Task> BuilderChain<U> ofTasks(U task, U... moreTasks)
     {
-        return _of(_stream(task, moreTasks).map(TaskNode::builder));
+        return of(stream(task, moreTasks).map(TaskNode::builder));
     }
 
     /**
@@ -113,7 +113,7 @@ public class BuilderChain<T extends Task>
      */
     public static <U extends Task> BuilderChain<U> ofTasks(Collection<? extends U> tasks)
     {
-        return tasks.isEmpty() ? _ofEmptySegment() : _of(tasks.stream().map(TaskNode::builder));
+        return tasks.isEmpty() ? ofEmptySegment() : of(tasks.stream().map(TaskNode::builder));
     }
 
     /**
@@ -124,7 +124,7 @@ public class BuilderChain<T extends Task>
     public static <U extends Task> BuilderChain<U> of(WorkflowNode.Builder<U> builder,
                                                       WorkflowNode.Builder<U>... moreBuilders)
     {
-        return _of(_stream(builder, moreBuilders));
+        return of(stream(builder, moreBuilders));
     }
 
     /**
@@ -133,10 +133,10 @@ public class BuilderChain<T extends Task>
      */
     public static <U extends Task> BuilderChain<U> of(Collection<WorkflowNode.Builder<U>> builders)
     {
-        return builders.isEmpty() ? _ofEmptySegment() : _of(builders.stream());
+        return builders.isEmpty() ? ofEmptySegment() : of(builders.stream());
     }
 
-    private static <U extends Task> BuilderChain<U> _of(Stream<WorkflowNode.Builder<U>> builders)
+    private static <U extends Task> BuilderChain<U> of(Stream<WorkflowNode.Builder<U>> builders)
     {
         BuilderChain<U> self = new BuilderChain<>();
 
@@ -154,7 +154,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public static <U extends Task> BuilderChain<U> ofChains(BuilderChain<U> chain, BuilderChain<U>... moreChains)
     {
-        return _ofChains(_stream(chain, moreChains));
+        return ofChains(stream(chain, moreChains));
     }
 
     /**
@@ -163,10 +163,10 @@ public class BuilderChain<T extends Task>
      */
     public static <U extends Task> BuilderChain<U> ofChains(Collection<BuilderChain<U>> chains)
     {
-        return chains.isEmpty() ? _ofEmptySegment() : _ofChains(chains.stream());
+        return chains.isEmpty() ? ofEmptySegment() : ofChains(chains.stream());
     }
 
-    private static <U extends Task> BuilderChain<U> _ofChains(Stream<BuilderChain<U>> chains)
+    private static <U extends Task> BuilderChain<U> ofChains(Stream<BuilderChain<U>> chains)
     {
         BuilderChain<U> self = new BuilderChain<>();
 
@@ -179,7 +179,7 @@ public class BuilderChain<T extends Task>
         return self;
     }
 
-    private static <U extends Task> BuilderChain<U> _ofEmptySegment()
+    private static <U extends Task> BuilderChain<U> ofEmptySegment()
     {
         BuilderChain<U> self = new BuilderChain<>();
         self.m_tail.addDependencies(self.m_head);
@@ -196,7 +196,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public final BuilderChain<T> andThenTasks(T task, T... moreTasks)
     {
-        return _andThen(_stream(task, moreTasks).map(TaskNode::builder));
+        return andThen(stream(task, moreTasks).map(TaskNode::builder));
     }
 
     /**
@@ -208,7 +208,7 @@ public class BuilderChain<T extends Task>
     @CanIgnoreReturnValue
     public BuilderChain<T> andThenTasks(Collection<? extends T> tasks)
     {
-        return tasks.isEmpty() ? _andThenEmptySegment() : _andThen(tasks.stream().map(TaskNode::builder));
+        return tasks.isEmpty() ? andThenEmptySegment() : andThen(tasks.stream().map(TaskNode::builder));
     }
 
     /**
@@ -221,7 +221,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public final BuilderChain<T> andThen(WorkflowNode.Builder<T> builder, WorkflowNode.Builder<T>... moreBuilders)
     {
-        return _andThen(_stream(builder, moreBuilders));
+        return andThen(stream(builder, moreBuilders));
     }
 
     /**
@@ -233,10 +233,10 @@ public class BuilderChain<T extends Task>
     @CanIgnoreReturnValue
     public BuilderChain<T> andThen(Collection<WorkflowNode.Builder<T>> builders)
     {
-        return builders.isEmpty() ? _andThenEmptySegment() : _andThen(builders.stream());
+        return builders.isEmpty() ? andThenEmptySegment() : andThen(builders.stream());
     }
 
-    private BuilderChain<T> _andThen(Stream<WorkflowNode.Builder<T>> builders)
+    private BuilderChain<T> andThen(Stream<WorkflowNode.Builder<T>> builders)
     {
         WorkflowNode.Builder<T> newTail = StructureNode.builder();
 
@@ -259,7 +259,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public final BuilderChain<T> andThenChains(BuilderChain<T> chain, BuilderChain<T>... moreChains)
     {
-        return _andThenChains(_stream(chain, moreChains));
+        return andThenChains(stream(chain, moreChains));
     }
 
     /**
@@ -271,10 +271,10 @@ public class BuilderChain<T extends Task>
     @CanIgnoreReturnValue
     public BuilderChain<T> andThenChains(Collection<BuilderChain<T>> chains)
     {
-        return chains.isEmpty() ? _andThenEmptySegment() : _andThenChains(chains.stream());
+        return chains.isEmpty() ? andThenEmptySegment() : andThenChains(chains.stream());
     }
 
-    private BuilderChain<T> _andThenChains(Stream<BuilderChain<T>> chains)
+    private BuilderChain<T> andThenChains(Stream<BuilderChain<T>> chains)
     {
         WorkflowNode.Builder<T> newTail = StructureNode.builder();
 
@@ -289,7 +289,7 @@ public class BuilderChain<T extends Task>
         return this;
     }
 
-    private BuilderChain<T> _andThenEmptySegment()
+    private BuilderChain<T> andThenEmptySegment()
     {
         WorkflowNode.Builder<T> newTail = StructureNode.builder();
         newTail.addDependencies(m_tail);

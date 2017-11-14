@@ -237,8 +237,8 @@ public class Execution<T extends Task>
     {
         Execution<U> thawed = new Execution<>(frozen.getWorkflow(), scheduler, outputHandler,
                                               new ConcurrentHashMap<>(frozen.getNodeStatuses()));
-        thawed._updateReadiness();
-        thawed._registerCallbacks();
+        thawed.updateReadiness();
+        thawed.registerCallbacks();
         return thawed;
     }
 
@@ -320,7 +320,7 @@ public class Execution<T extends Task>
 
             try
             {
-                _submitReadyNodes();
+                submitReadyNodes();
 
                 while (!m_nodesByState.get(NodeState.SCHEDULED).isEmpty()
                         || !m_structureNodeQueue.isEmpty()
@@ -330,8 +330,8 @@ public class Execution<T extends Task>
                     WorkflowNode<T> node = m_structureNodeQueue.poll();
                     if (node != null)
                     {
-                        _updateDependentReadiness(node);
-                        _submitReadyNodes();
+                        updateDependentReadiness(node);
+                        submitReadyNodes();
                         continue;  // In case this was the last node
                     }
 
@@ -346,7 +346,7 @@ public class Execution<T extends Task>
                         catch (InterruptedException e)
                         {
                             m_exceptions.add(e);
-                            _maybeThrow();
+                            throwStoredExceptions();
                             throw e;
                         }
                     }
@@ -354,8 +354,8 @@ public class Execution<T extends Task>
                     node = completion.getNode();
                     if (m_nodeStatuses.get(node).getState().equals(NodeState.SUCCEEDED))
                     {
-                        _updateDependentReadiness(node);
-                        _submitReadyNodes();
+                        updateDependentReadiness(node);
+                        submitReadyNodes();
                     }
                     else
                     {
@@ -378,12 +378,12 @@ public class Execution<T extends Task>
                     }
                 }
 
-                _maybeThrow();
+                throwStoredExceptions();
             }
             catch (Exception e)
             {
                 m_exceptions.add(e);
-                _maybeThrow();
+                throwStoredExceptions();
                 throw e;
             }
             finally
@@ -447,7 +447,7 @@ public class Execution<T extends Task>
     }
 
     @GuardedBy("m_lock")
-    private void _registerCallbacks() throws InvalidTokenException
+    private void registerCallbacks() throws InvalidTokenException
     {
         for (WorkflowNode<T> node : m_nodesByState.get(NodeState.SCHEDULED))
         {
@@ -462,31 +462,31 @@ public class Execution<T extends Task>
     }
 
     @GuardedBy("m_lock")
-    private void _updateReadiness()
+    private void updateReadiness()
     {
-        _updateReadiness(m_nodesByState.get(NodeState.NOT_READY).stream());
+        updateReadiness(m_nodesByState.get(NodeState.NOT_READY).stream());
     }
 
     @GuardedBy("m_lock")
-    private void _updateDependentReadiness(WorkflowNode<T> node)
+    private void updateDependentReadiness(WorkflowNode<T> node)
     {
-        _updateReadiness(
+        updateReadiness(
                 node.getDependents().stream()
                         .filter(dependent -> m_nodeStatuses.get(dependent).getState().equals(NodeState.NOT_READY))
         );
     }
 
     @GuardedBy("m_lock")
-    private void _updateReadiness(Stream<WorkflowNode<T>> potentiallyReadyNodes)
+    private void updateReadiness(Stream<WorkflowNode<T>> potentiallyReadyNodes)
     {
         potentiallyReadyNodes
                 .filter(dependent -> dependent.getDependencies().stream()
                         .allMatch(dependency -> m_nodeStatuses.get(dependency).getState().satisfiesDependency()))
-                .forEach(dependent -> _updateStatus(dependent, NodeState.READY));
+                .forEach(dependent -> updateStatus(dependent, NodeState.READY));
     }
 
     @GuardedBy("m_lock")
-    private void _submitReadyNodes()
+    private void submitReadyNodes()
     {
         Set<WorkflowNode<T>> readyNodes = m_nodesByState.get(NodeState.READY);
         while (m_state == ExecutionState.RUNNING && !readyNodes.isEmpty())
@@ -501,7 +501,7 @@ public class Execution<T extends Task>
                 // state object. However, in the case of a direct executor, submit() will do the
                 // actual task execution and invoke a completion callback before we get a token.
                 // To begin with, set the state to SCHEDULED with no token.
-                _updateStatus(node, NodeState.SCHEDULED);
+                updateStatus(node, NodeState.SCHEDULED);
 
                 // Try submitting the node. If the task executor implementation blows up or gives
                 // us a null token, mark the node as FAILED: we don't want SCHEDULED nodes with
@@ -516,32 +516,32 @@ public class Execution<T extends Task>
                 }
                 catch (Exception e)
                 {
-                    _updateStatus(node, NodeState.FAILED);
+                    updateStatus(node, NodeState.FAILED);
                     throw e;
                 }
 
                 // Only update state if submit() didn't do it for us
                 if (m_nodeStatuses.get(node).getState().equals(NodeState.SCHEDULED))
                 {
-                    _updateStatus(node, NodeStatus.scheduledWithToken(token));
+                    updateStatus(node, NodeStatus.scheduledWithToken(token));
                 }
             }
             else
             {
-                _updateStatus(node, NodeState.SUCCEEDED);
+                updateStatus(node, NodeState.SUCCEEDED);
                 m_structureNodeQueue.add((StructureNode<T>) node);
             }
         }
     }
 
     // @GuardedBy("m_lock")
-    private void _updateStatus(WorkflowNode<T> node, NodeState state)
+    private void updateStatus(WorkflowNode<T> node, NodeState state)
     {
-        _updateStatus(node, NodeStatus.withoutToken(state));
+        updateStatus(node, NodeStatus.withoutToken(state));
     }
 
     // @GuardedBy("m_lock")
-    private void _updateStatus(WorkflowNode<T> node, NodeStatus status)
+    private void updateStatus(WorkflowNode<T> node, NodeStatus status)
     {
         m_nodeStatuses.put(node, status);
 
@@ -559,14 +559,22 @@ public class Execution<T extends Task>
     }
 
     /**
-     * Throws the most important exception seen so far, if any.
-     * Clears the list of exceptions.
+     * If the list of stored exceptions contains any exceptions, throws the
+     * most important one, with the rest attached as suppressed exceptions.
+     * Otherwise, returns normally. Clears the stored exception list.
+     *
+     * <p>Unchecked exceptions and checked exceptions of an unexpected type are
+     * considered most important, followed by instances of ExecutionException
+     * and InterruptedException. Unexpected checked exceptions are wrapped in
+     * an AssertionError.</p>
+     *
+     * <p>It's possible for the list to contain an IOException, but it should
+     * always be accompanied by an ExecutionException, so the top-level
+     * exception can't be an IOException.</p>
      */
     @GuardedBy("m_lock")
-    private void _maybeThrow() throws ExecutionException, InterruptedException
+    private void throwStoredExceptions() throws ExecutionException, InterruptedException
     {
-        // Throw unchecked exceptions first, followed by ExecutionException, IOException, InterruptedException
-        // If we have an IOException, we should also have an ExecutionException
         m_exceptions.sort(Comparator.comparing(InterruptedException.class::isInstance)
                                   .thenComparing(IOException.class::isInstance)
                                   .thenComparing(ExecutionException.class::isInstance));
@@ -678,7 +686,7 @@ public class Execution<T extends Task>
             {
                 if (m_nodeStatuses.get(m_node).getState().equals(NodeState.SCHEDULED))
                 {
-                    _updateStatus(m_node, state);
+                    updateStatus(m_node, state);
                     m_taskNodeQueue.add(result);
                     m_taskNodeAvailable.signal();
                 }

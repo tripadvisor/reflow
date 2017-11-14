@@ -27,10 +27,10 @@ public final class WorkflowTest
 {
     private static final String TEMPLATE_EMPTY = "Input collection is empty";
     private static final String TEMPLATE_INCOMPLETE = "Input collection is incomplete";
-    private static final String GRAPH_CONTAINS_CYCLE = "Input graph contains a cycle";
+    private static final String TEMPLATE_CONTAINS_CYCLE = "Input graph contains a cycle";
 
     @DataProvider
-    public Object[][] testBuildGraphDataSet()
+    public Object[][] testCreateDataSet()
     {
         BuilderAssembler<Task, Builder<Task>> builderAssembler = BuilderAssembler.usingTasks(NoOpTask::new);
 
@@ -58,7 +58,7 @@ public final class WorkflowTest
         // Single-node graph with a loop
         b = builderAssembler.builderList(1);
         b.get(0).addDependencies(b.get(0));
-        dataSet.add(new Object[] { b, IllegalArgumentException.class, GRAPH_CONTAINS_CYCLE });
+        dataSet.add(new Object[] { b, IllegalArgumentException.class, TEMPLATE_CONTAINS_CYCLE});
 
         // Two-node graph with no edges
         b = builderAssembler.builderList(2);
@@ -76,7 +76,7 @@ public final class WorkflowTest
         b = builderAssembler.builderList(2);
         b.get(0).addDependencies(b.get(1));
         b.get(1).addDependencies(b.get(0));
-        dataSet.add(new Object[] { b, IllegalArgumentException.class, GRAPH_CONTAINS_CYCLE });
+        dataSet.add(new Object[] { b, IllegalArgumentException.class, TEMPLATE_CONTAINS_CYCLE});
 
         // Builder list with a duplicate element
         b = builderAssembler.builderList(1);
@@ -98,7 +98,7 @@ public final class WorkflowTest
         b.get(0).setDependencies(ImmutableSet.of());
         b.get(1).addDependencies(b.get(0), b.get(2));
         b.get(2).addDependencies(b.get(1));
-        dataSet.add(new Object[] { b, IllegalArgumentException.class, GRAPH_CONTAINS_CYCLE });
+        dataSet.add(new Object[] { b, IllegalArgumentException.class, TEMPLATE_CONTAINS_CYCLE});
 
         // 0-1-2-3-4
         //    \ /
@@ -109,10 +109,10 @@ public final class WorkflowTest
         return dataSet.toArray(new Object[dataSet.size()][]);
     }
 
-    @Test(dataProvider = "testBuildGraphDataSet")
-    public void testBuildGraph(List<Builder<Task>> template,
-                               @Nullable Class<? extends Exception> expectedException,
-                               @Nullable String expectedMessagePrefix)
+    @Test(dataProvider = "testCreateDataSet")
+    public void testCreate(List<Builder<Task>> template,
+                           @Nullable Class<? extends Exception> expectedException,
+                           @Nullable String expectedMessagePrefix)
     {
         // Build a map of the expected dependent builders
         Map<WorkflowNode.Builder<Task>, Set<Builder<Task>>> dependentMap =
@@ -131,10 +131,10 @@ public final class WorkflowTest
         }
 
         // Build the workflow itself
-        Workflow<Task> graph;
+        Workflow<Task> workflow;
         try
         {
-            graph = Workflow.create(template);
+            workflow = Workflow.create(template);
             if (expectedException != null || expectedMessagePrefix != null)
             {
                 fail("Workflow creation should have thrown an exception");
@@ -158,10 +158,10 @@ public final class WorkflowTest
         }
 
         // Verify that the returned workflow matches what we passed in
-        assertThat(graph.getNodes()).hasSize(template.size());
+        assertThat(workflow.getNodes()).hasSize(template.size());
 
         Map<Builder<Task>, WorkflowNode<Task>> builderNodeMap = template.stream().collect(toMap(
-                Function.identity(), builder -> graph.getNodes().get(builder.getKey())
+                Function.identity(), builder -> workflow.getNodes().get(builder.getKey())
         ));
 
         builderNodeMap.forEach((builder, node) ->

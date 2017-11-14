@@ -51,7 +51,7 @@ final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubj
         check().withFailureMessage("%s is not a dependency of itself", actual())
                 .that(actual()).isNotEqualTo(dependency);
         check().withFailureMessage("%s should have eventual dependency %s", actual(), dependency)
-                .that(_nodeReachableFromSubject(dependency, node -> node.getDependencies().iterator())).isTrue();
+                .that(nodeReachableFromSubject(dependency, node -> node.getDependencies().iterator())).isTrue();
     }
 
     /**
@@ -62,11 +62,11 @@ final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubj
     {
         Preconditions.checkNotNull(dependency);
         check().withFailureMessage("%s should not have eventual dependency %s", actual(), dependency)
-                .that(_nodeReachableFromSubject(dependency, node -> node.getDependencies().iterator())).isFalse();
+                .that(nodeReachableFromSubject(dependency, node -> node.getDependencies().iterator())).isFalse();
     }
 
-    private boolean _nodeReachableFromSubject(WorkflowNode<T> node,
-                                              Function<WorkflowNode<T>, Iterator<WorkflowNode<T>>> neighborsFunc)
+    private boolean nodeReachableFromSubject(WorkflowNode<T> node,
+                                             Function<WorkflowNode<T>, Iterator<WorkflowNode<T>>> neighborsFunc)
     {
         return Iterators.tryFind(
                 TraversalUtils.traverseNodes(Iterators.singletonIterator(actual()), neighborsFunc),

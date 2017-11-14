@@ -16,34 +16,34 @@ public final class BuilderChainTest
     @Test
     public void testBuild()
     {
-        Workflow<NoOpTask> graph;
+        Workflow<NoOpTask> workflow;
 
         // Two segments, two nodes per segment, head key only
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.ofTasks(new NoOpTask(), new NoOpTask())
                         .andThenTasks(new NoOpTask(), new NoOpTask())
                         .setHeadKey("A")
                         .getContents()
         );
-        assertThat(graph.getNodes().keySet()).contains("A");
+        assertThat(workflow.getNodes().keySet()).contains("A");
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(0);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(6);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(6);
 
         // Two segments, two nodes per segment, tail key only
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.ofTasks(new NoOpTask(), new NoOpTask())
                         .andThenTasks(new NoOpTask(), new NoOpTask())
                         .setTailKey("A")
                         .getContents()
         );
-        assertThat(graph.getNodes().keySet()).contains("A");
+        assertThat(workflow.getNodes().keySet()).contains("A");
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(6);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(6);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(0);
 
         // Two segments, two nodes per segment, keys between segments
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.ofTasks(new NoOpTask(), new NoOpTask())
                         .setTailKey("A")
                         .andThenTasks(new NoOpTask(), new NoOpTask())
@@ -51,21 +51,21 @@ public final class BuilderChainTest
                         .setHeadKey("C")
                         .getContents()
         );
-        assertThat(graph.getNodes().keySet()).containsAllOf("A", "B", "C");
+        assertThat(workflow.getNodes().keySet()).containsAllOf("A", "B", "C");
 
-        assertThat(graph.getNodes().get("C")).hasEventualDependencyCount(0);
-        assertThat(graph.getNodes().get("C")).hasEventualDependentCount(6);
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(3);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(3);
-        assertThat(graph.getNodes().get("B")).hasEventualDependencyCount(6);
-        assertThat(graph.getNodes().get("B")).hasEventualDependentCount(0);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependencyCount(0);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependentCount(6);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(3);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(3);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependencyCount(6);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependentCount(0);
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependency(graph.getNodes().get("C"));
-        assertThat(graph.getNodes().get("B")).hasEventualDependency(graph.getNodes().get("C"));
-        assertThat(graph.getNodes().get("B")).hasEventualDependency(graph.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("A")).hasEventualDependency(workflow.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("B")).hasEventualDependency(workflow.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("B")).hasEventualDependency(workflow.getNodes().get("A"));
 
         // Nested chains, head/tail keys for inner chains
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.ofChains(
                         BuilderChain.ofTasks(new NoOpTask())
                                 .andThenTasks(new NoOpTask())
@@ -77,40 +77,40 @@ public final class BuilderChainTest
                                 .setTailKey("D")
                 ).getContents()
         );
-        assertThat(graph.getNodes().keySet()).containsAllOf("A", "B", "C", "D");
+        assertThat(workflow.getNodes().keySet()).containsAllOf("A", "B", "C", "D");
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(1);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(5);
-        assertThat(graph.getNodes().get("B")).hasEventualDependencyCount(5);
-        assertThat(graph.getNodes().get("B")).hasEventualDependentCount(1);
-        assertThat(graph.getNodes().get("C")).hasEventualDependencyCount(1);
-        assertThat(graph.getNodes().get("C")).hasEventualDependentCount(5);
-        assertThat(graph.getNodes().get("D")).hasEventualDependencyCount(5);
-        assertThat(graph.getNodes().get("D")).hasEventualDependentCount(1);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(1);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(5);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependencyCount(5);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependentCount(1);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependencyCount(1);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependentCount(5);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependencyCount(5);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependentCount(1);
 
-        assertThat(graph.getNodes().get("B")).hasEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("C"));
-        assertThat(graph.getNodes().get("B")).doesNotHaveEventualDependency(graph.getNodes().get("C"));
-        assertThat(graph.getNodes().get("D")).doesNotHaveEventualDependency(graph.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("B")).hasEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("B")).doesNotHaveEventualDependency(workflow.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("D")).doesNotHaveEventualDependency(workflow.getNodes().get("A"));
 
         // Nested chains, head/tail key for outer chain
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.ofChains(
                         BuilderChain.ofTasks(new NoOpTask()).andThenTasks(new NoOpTask()),
                         BuilderChain.ofTasks(new NoOpTask()).andThenTasks(new NoOpTask())
                 ).setHeadKey("A").setTailKey("B").getContents()
         );
-        assertThat(graph.getNodes().keySet()).containsAllOf("A", "B");
+        assertThat(workflow.getNodes().keySet()).containsAllOf("A", "B");
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(0);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(11);
-        assertThat(graph.getNodes().get("B")).hasEventualDependencyCount(11);
-        assertThat(graph.getNodes().get("B")).hasEventualDependentCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(11);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependencyCount(11);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependentCount(0);
 
-        assertThat(graph.getNodes().get("B")).hasEventualDependency(graph.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("B")).hasEventualDependency(workflow.getNodes().get("A"));
 
         // Nested chains, head/tail key for all chains
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.ofChains(
                         BuilderChain.ofTasks(new NoOpTask())
                                 .andThenTasks(new NoOpTask())
@@ -122,33 +122,33 @@ public final class BuilderChainTest
                                 .setTailKey("D")
                 ).setHeadKey("E").setTailKey("F").getContents()
         );
-        assertThat(graph.getNodes().keySet()).containsAllOf("A", "B", "C", "D", "E", "F");
+        assertThat(workflow.getNodes().keySet()).containsAllOf("A", "B", "C", "D", "E", "F");
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(1);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(5);
-        assertThat(graph.getNodes().get("B")).hasEventualDependencyCount(5);
-        assertThat(graph.getNodes().get("B")).hasEventualDependentCount(1);
-        assertThat(graph.getNodes().get("C")).hasEventualDependencyCount(1);
-        assertThat(graph.getNodes().get("C")).hasEventualDependentCount(5);
-        assertThat(graph.getNodes().get("D")).hasEventualDependencyCount(5);
-        assertThat(graph.getNodes().get("D")).hasEventualDependentCount(1);
-        assertThat(graph.getNodes().get("E")).hasEventualDependencyCount(0);
-        assertThat(graph.getNodes().get("E")).hasEventualDependentCount(11);
-        assertThat(graph.getNodes().get("F")).hasEventualDependencyCount(11);
-        assertThat(graph.getNodes().get("F")).hasEventualDependentCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(1);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(5);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependencyCount(5);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependentCount(1);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependencyCount(1);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependentCount(5);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependencyCount(5);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependentCount(1);
+        assertThat(workflow.getNodes().get("E")).hasEventualDependencyCount(0);
+        assertThat(workflow.getNodes().get("E")).hasEventualDependentCount(11);
+        assertThat(workflow.getNodes().get("F")).hasEventualDependencyCount(11);
+        assertThat(workflow.getNodes().get("F")).hasEventualDependentCount(0);
 
-        assertThat(graph.getNodes().get("B")).hasEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("B")).hasEventualDependency(graph.getNodes().get("E"));
-        assertThat(graph.getNodes().get("F")).hasEventualDependency(graph.getNodes().get("B"));
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("C"));
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("E"));
-        assertThat(graph.getNodes().get("F")).hasEventualDependency(graph.getNodes().get("D"));
-        assertThat(graph.getNodes().get("F")).hasEventualDependency(graph.getNodes().get("E"));
-        assertThat(graph.getNodes().get("B")).doesNotHaveEventualDependency(graph.getNodes().get("C"));
-        assertThat(graph.getNodes().get("D")).doesNotHaveEventualDependency(graph.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("B")).hasEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("B")).hasEventualDependency(workflow.getNodes().get("E"));
+        assertThat(workflow.getNodes().get("F")).hasEventualDependency(workflow.getNodes().get("B"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("E"));
+        assertThat(workflow.getNodes().get("F")).hasEventualDependency(workflow.getNodes().get("D"));
+        assertThat(workflow.getNodes().get("F")).hasEventualDependency(workflow.getNodes().get("E"));
+        assertThat(workflow.getNodes().get("B")).doesNotHaveEventualDependency(workflow.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("D")).doesNotHaveEventualDependency(workflow.getNodes().get("A"));
 
         // Keys associated with non-structural nodes
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.ofChains(
                         BuilderChain.of(TaskNode.builder("A", new NoOpTask())),
                         BuilderChain.of(TaskNode.builder("B", new NoOpTask()))
@@ -156,25 +156,25 @@ public final class BuilderChainTest
                                 .andThen(TaskNode.builder("C", new NoOpTask()))
                 ).setTailKey("D").getContents()
         );
-        assertThat(graph.getNodes().keySet()).containsAllOf("A", "B", "C", "D");
+        assertThat(workflow.getNodes().keySet()).containsAllOf("A", "B", "C", "D");
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(2);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(2);
-        assertThat(graph.getNodes().get("B")).hasEventualDependencyCount(2);
-        assertThat(graph.getNodes().get("B")).hasEventualDependentCount(6);
-        assertThat(graph.getNodes().get("C")).hasEventualDependencyCount(6);
-        assertThat(graph.getNodes().get("C")).hasEventualDependentCount(2);
-        assertThat(graph.getNodes().get("D")).hasEventualDependencyCount(11);
-        assertThat(graph.getNodes().get("D")).hasEventualDependentCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(2);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(2);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependencyCount(2);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependentCount(6);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependencyCount(6);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependentCount(2);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependencyCount(11);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependentCount(0);
 
-        assertThat(graph.getNodes().get("C")).hasEventualDependency(graph.getNodes().get("B"));
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("B"));
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("C"));
-        assertThat(graph.getNodes().get("B")).doesNotHaveEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("A")).doesNotHaveEventualDependency(graph.getNodes().get("B"));
-        assertThat(graph.getNodes().get("C")).doesNotHaveEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("A")).doesNotHaveEventualDependency(graph.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("C")).hasEventualDependency(workflow.getNodes().get("B"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("B"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("B")).doesNotHaveEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("A")).doesNotHaveEventualDependency(workflow.getNodes().get("B"));
+        assertThat(workflow.getNodes().get("C")).doesNotHaveEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("A")).doesNotHaveEventualDependency(workflow.getNodes().get("C"));
 
         // Hanging chains off the side of a main chain
         BuilderChain<NoOpTask> main = BuilderChain.ofTasks(new NoOpTask())
@@ -189,40 +189,40 @@ public final class BuilderChainTest
         sub3.getHead().addDependencies(main.getTail());
         main.getContents().addAll(sub3.getContents());
 
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 main.andThenTasks(new NoOpTask())
                         .setTailKey("D")
                         .getContents()
         );
-        assertThat(graph.getNodes().keySet()).containsAllOf("A", "B", "C", "D");
+        assertThat(workflow.getNodes().keySet()).containsAllOf("A", "B", "C", "D");
 
-        assertThat(graph.getNodes().get("A")).hasEventualDependencyCount(0);
-        assertThat(graph.getNodes().get("A")).hasEventualDependentCount(9);
-        assertThat(graph.getNodes().get("B")).hasEventualDependencyCount(0);
-        assertThat(graph.getNodes().get("B")).hasEventualDependentCount(8);
-        assertThat(graph.getNodes().get("C")).hasEventualDependencyCount(10);
-        assertThat(graph.getNodes().get("C")).hasEventualDependentCount(0);
-        assertThat(graph.getNodes().get("D")).hasEventualDependencyCount(9);
-        assertThat(graph.getNodes().get("D")).hasEventualDependentCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependencyCount(0);
+        assertThat(workflow.getNodes().get("A")).hasEventualDependentCount(9);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependencyCount(0);
+        assertThat(workflow.getNodes().get("B")).hasEventualDependentCount(8);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependencyCount(10);
+        assertThat(workflow.getNodes().get("C")).hasEventualDependentCount(0);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependencyCount(9);
+        assertThat(workflow.getNodes().get("D")).hasEventualDependentCount(0);
 
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("D")).hasEventualDependency(graph.getNodes().get("B"));
-        assertThat(graph.getNodes().get("C")).hasEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("C")).hasEventualDependency(graph.getNodes().get("B"));
-        assertThat(graph.getNodes().get("A")).doesNotHaveEventualDependency(graph.getNodes().get("B"));
-        assertThat(graph.getNodes().get("B")).doesNotHaveEventualDependency(graph.getNodes().get("A"));
-        assertThat(graph.getNodes().get("C")).doesNotHaveEventualDependency(graph.getNodes().get("D"));
-        assertThat(graph.getNodes().get("D")).doesNotHaveEventualDependency(graph.getNodes().get("C"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("D")).hasEventualDependency(workflow.getNodes().get("B"));
+        assertThat(workflow.getNodes().get("C")).hasEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("C")).hasEventualDependency(workflow.getNodes().get("B"));
+        assertThat(workflow.getNodes().get("A")).doesNotHaveEventualDependency(workflow.getNodes().get("B"));
+        assertThat(workflow.getNodes().get("B")).doesNotHaveEventualDependency(workflow.getNodes().get("A"));
+        assertThat(workflow.getNodes().get("C")).doesNotHaveEventualDependency(workflow.getNodes().get("D"));
+        assertThat(workflow.getNodes().get("D")).doesNotHaveEventualDependency(workflow.getNodes().get("C"));
 
         // Empty segment
-        graph = Workflow.create(
+        workflow = Workflow.create(
                 BuilderChain.<NoOpTask>ofTasks(ImmutableSet.of())
                         .setHeadKey("1")
                         .setTailKey("A")
                         .getContents()
         );
-        assertThat(graph.getNodes().keySet()).containsAllOf("1", "A");
-        assertThat(graph.getNodes().get("A")).hasEventualDependency(graph.getNodes().get("1"));
+        assertThat(workflow.getNodes().keySet()).containsAllOf("1", "A");
+        assertThat(workflow.getNodes().get("A")).hasEventualDependency(workflow.getNodes().get("1"));
     }
 
     @Test
@@ -252,21 +252,21 @@ public final class BuilderChainTest
         assertThat(contents2).hasSize(4);
 
         // Attempting to remove elements from a set should throw an exception
-        _assertUnsupportedOperation(() -> contents1.remove(builder1));
-        _assertUnsupportedOperation(() -> contents1.remove(builder2));
-        _assertUnsupportedOperation(() -> contents1.removeAll(contents2));
-        _assertUnsupportedOperation(() -> contents1.removeAll(empty));
-        _assertUnsupportedOperation(() -> contents1.retainAll(contents2));
-        _assertUnsupportedOperation(() -> contents1.retainAll(empty));
-        _assertUnsupportedOperation(() -> contents1.removeIf(x -> true));
-        _assertUnsupportedOperation(() -> contents1.removeIf(x -> false));
+        assertUnsupportedOperation(() -> contents1.remove(builder1));
+        assertUnsupportedOperation(() -> contents1.remove(builder2));
+        assertUnsupportedOperation(() -> contents1.removeAll(contents2));
+        assertUnsupportedOperation(() -> contents1.removeAll(empty));
+        assertUnsupportedOperation(() -> contents1.retainAll(contents2));
+        assertUnsupportedOperation(() -> contents1.retainAll(empty));
+        assertUnsupportedOperation(() -> contents1.removeIf(x -> true));
+        assertUnsupportedOperation(() -> contents1.removeIf(x -> false));
 
         Iterator<WorkflowNode.Builder<Task>> iter = contents1.iterator();
         iter.next();
-        _assertUnsupportedOperation(iter::remove);
+        assertUnsupportedOperation(iter::remove);
     }
 
-    private void _assertUnsupportedOperation(Runnable runnable)
+    private void assertUnsupportedOperation(Runnable runnable)
     {
         try
         {
