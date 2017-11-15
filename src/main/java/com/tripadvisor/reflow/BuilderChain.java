@@ -91,12 +91,6 @@ public class BuilderChain<T extends Task>
     private BuilderChain()
     {}
 
-    @SafeVarargs
-    private static <U> Stream<U> stream(U first, U... rest)
-    {
-        return Lists.asList(first, rest).stream();
-    }
-
     /**
      * Returns a single-segment chain containing a builder
      * for each of the given tasks in parallel.
@@ -104,7 +98,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public static <U extends Task> BuilderChain<U> ofTasks(U task, U... moreTasks)
     {
-        return of(stream(task, moreTasks).map(TaskNode::builder));
+        return ofStream(Lists.asList(task, moreTasks).stream().map(TaskNode::builder));
     }
 
     /**
@@ -113,7 +107,7 @@ public class BuilderChain<T extends Task>
      */
     public static <U extends Task> BuilderChain<U> ofTasks(Collection<? extends U> tasks)
     {
-        return tasks.isEmpty() ? ofEmptySegment() : of(tasks.stream().map(TaskNode::builder));
+        return tasks.isEmpty() ? ofEmptySegment() : ofStream(tasks.stream().map(TaskNode::builder));
     }
 
     /**
@@ -124,7 +118,7 @@ public class BuilderChain<T extends Task>
     public static <U extends Task> BuilderChain<U> of(WorkflowNode.Builder<U> builder,
                                                       WorkflowNode.Builder<U>... moreBuilders)
     {
-        return of(stream(builder, moreBuilders));
+        return ofStream(Lists.asList(builder, moreBuilders).stream());
     }
 
     /**
@@ -133,16 +127,18 @@ public class BuilderChain<T extends Task>
      */
     public static <U extends Task> BuilderChain<U> of(Collection<WorkflowNode.Builder<U>> builders)
     {
-        return builders.isEmpty() ? ofEmptySegment() : of(builders.stream());
+        return builders.isEmpty() ? ofEmptySegment() : ofStream(builders.stream());
     }
 
-    private static <U extends Task> BuilderChain<U> of(Stream<WorkflowNode.Builder<U>> builders)
+    private static <U extends Task> BuilderChain<U> ofStream(Stream<WorkflowNode.Builder<U>> builders)
     {
         BuilderChain<U> self = new BuilderChain<>();
 
-        builders.peek(builder -> builder.addDependencies(self.m_head))
-                .peek(builder -> self.m_tail.addDependencies(builder))
-                .forEach(self.m_contents::add);
+        builders.forEach(builder -> {
+            builder.addDependencies(self.m_head);
+            self.m_tail.addDependencies(builder);
+            self.m_contents.add(builder);
+        });
 
         return self;
     }
@@ -154,7 +150,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public static <U extends Task> BuilderChain<U> ofChains(BuilderChain<U> chain, BuilderChain<U>... moreChains)
     {
-        return ofChains(stream(chain, moreChains));
+        return ofChains(Lists.asList(chain, moreChains));
     }
 
     /**
@@ -163,18 +159,21 @@ public class BuilderChain<T extends Task>
      */
     public static <U extends Task> BuilderChain<U> ofChains(Collection<BuilderChain<U>> chains)
     {
-        return chains.isEmpty() ? ofEmptySegment() : ofChains(chains.stream());
-    }
+        if (chains.isEmpty())
+        {
+            return ofEmptySegment();
+        }
 
-    private static <U extends Task> BuilderChain<U> ofChains(Stream<BuilderChain<U>> chains)
-    {
         BuilderChain<U> self = new BuilderChain<>();
 
-        chains.peek(chain -> chain.m_head.addDependencies(self.m_head))
-                .peek(chain -> self.m_tail.addDependencies(chain.m_tail))
-                .peek(chain -> self.m_contents.add(chain.m_head))
-                .peek(chain -> self.m_contents.addAll(chain.m_contents))
-                .forEach(chain -> self.m_contents.add(chain.m_tail));
+        for (BuilderChain<U> chain : chains)
+        {
+            chain.m_head.addDependencies(self.m_head);
+            self.m_tail.addDependencies(chain.m_tail);
+            self.m_contents.add(chain.m_head);
+            self.m_contents.addAll(chain.m_contents);
+            self.m_contents.add(chain.m_tail);
+        }
 
         return self;
     }
@@ -196,7 +195,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public final BuilderChain<T> andThenTasks(T task, T... moreTasks)
     {
-        return andThen(stream(task, moreTasks).map(TaskNode::builder));
+        return andThenStream(Lists.asList(task, moreTasks).stream().map(TaskNode::builder));
     }
 
     /**
@@ -208,7 +207,7 @@ public class BuilderChain<T extends Task>
     @CanIgnoreReturnValue
     public BuilderChain<T> andThenTasks(Collection<? extends T> tasks)
     {
-        return tasks.isEmpty() ? andThenEmptySegment() : andThen(tasks.stream().map(TaskNode::builder));
+        return tasks.isEmpty() ? andThenEmptySegment() : andThenStream(tasks.stream().map(TaskNode::builder));
     }
 
     /**
@@ -221,7 +220,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public final BuilderChain<T> andThen(WorkflowNode.Builder<T> builder, WorkflowNode.Builder<T>... moreBuilders)
     {
-        return andThen(stream(builder, moreBuilders));
+        return andThenStream(Lists.asList(builder, moreBuilders).stream());
     }
 
     /**
@@ -233,16 +232,18 @@ public class BuilderChain<T extends Task>
     @CanIgnoreReturnValue
     public BuilderChain<T> andThen(Collection<WorkflowNode.Builder<T>> builders)
     {
-        return builders.isEmpty() ? andThenEmptySegment() : andThen(builders.stream());
+        return builders.isEmpty() ? andThenEmptySegment() : andThenStream(builders.stream());
     }
 
-    private BuilderChain<T> andThen(Stream<WorkflowNode.Builder<T>> builders)
+    private BuilderChain<T> andThenStream(Stream<WorkflowNode.Builder<T>> builders)
     {
         WorkflowNode.Builder<T> newTail = StructureNode.builder();
 
-        builders.peek(builder -> builder.addDependencies(m_tail))
-                .peek(builder -> newTail.addDependencies(builder))
-                .forEach(m_contents::add);
+        builders.forEach(builder -> {
+            builder.addDependencies(m_tail);
+            newTail.addDependencies(builder);
+            m_contents.add(builder);
+        });
 
         m_contents.add(m_tail);
         m_tail = newTail;
@@ -259,7 +260,7 @@ public class BuilderChain<T extends Task>
     @SafeVarargs
     public final BuilderChain<T> andThenChains(BuilderChain<T> chain, BuilderChain<T>... moreChains)
     {
-        return andThenChains(stream(chain, moreChains));
+        return andThenChains(Lists.asList(chain, moreChains));
     }
 
     /**
@@ -271,18 +272,21 @@ public class BuilderChain<T extends Task>
     @CanIgnoreReturnValue
     public BuilderChain<T> andThenChains(Collection<BuilderChain<T>> chains)
     {
-        return chains.isEmpty() ? andThenEmptySegment() : andThenChains(chains.stream());
-    }
+        if (chains.isEmpty())
+        {
+            return andThenEmptySegment();
+        }
 
-    private BuilderChain<T> andThenChains(Stream<BuilderChain<T>> chains)
-    {
         WorkflowNode.Builder<T> newTail = StructureNode.builder();
 
-        chains.peek(chain -> chain.m_head.addDependencies(m_tail))
-                .peek(chain -> newTail.addDependencies(chain.m_tail))
-                .peek(chain -> m_contents.add(chain.m_head))
-                .peek(chain -> m_contents.addAll(chain.m_contents))
-                .forEach(chain -> m_contents.add(chain.m_tail));
+        for (BuilderChain<T> chain : chains)
+        {
+            chain.m_head.addDependencies(m_tail);
+            newTail.addDependencies(chain.m_tail);
+            m_contents.add(chain.m_head);
+            m_contents.addAll(chain.m_contents);
+            m_contents.add(chain.m_tail);
+        }
 
         m_contents.add(m_tail);
         m_tail = newTail;
