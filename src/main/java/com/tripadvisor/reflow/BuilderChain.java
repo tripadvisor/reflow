@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
@@ -344,7 +345,8 @@ public class BuilderChain<T extends Task>
 
     /**
      * Returns the set of builders in this chain.
-     * Elements may be added to, but not removed from, the returned set.
+     * Additional builders can be added to the set for convenience.
+     * Elements cannot be removed from the set, and null elements are rejected.
      */
     public Set<WorkflowNode.Builder<T>> getContents()
     {
@@ -375,6 +377,7 @@ public class BuilderChain<T extends Task>
             @Override
             public boolean add(WorkflowNode.Builder<T> builder)
             {
+                Preconditions.checkNotNull(builder);
                 return !m_head.equals(builder) && !m_tail.equals(builder) && m_contents.add(builder);
             }
 

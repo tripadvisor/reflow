@@ -52,6 +52,8 @@ public class PathOutput implements Output
     /**
      * Returns the modification time of the output file or directory,
      * or an empty optional if it does not exist.
+     *
+     * @throws IOException if an I/O error occurs
      */
     @Override
     public Optional<Instant> getTimestamp() throws IOException
@@ -67,6 +69,8 @@ public class PathOutput implements Output
     /**
      * Deletes the output file or directory.
      * Directories will be deleted even if they are not empty.
+     *
+     * @throws IOException if an I/O error occurs
      */
     @Override
     public void delete() throws IOException
@@ -100,7 +104,6 @@ public class PathOutput implements Output
 
     /**
      * Returns a string representation of this output.
-     * The exact value returned is subject to change.
      */
     @Override
     public String toString()

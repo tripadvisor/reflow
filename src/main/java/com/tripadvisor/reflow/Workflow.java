@@ -61,7 +61,7 @@ public class Workflow<T extends Task> extends Target<T> implements Serializable
     }
 
     /**
-     * Constructs a graph from a collection of node builder objects.
+     * Constructs a graph from a non-empty collection of node builder objects.
      *
      * <p>The graph represented by the builders must be acyclic. The
      * dependencies of every builder in the given collection must also be in
@@ -74,6 +74,10 @@ public class Workflow<T extends Task> extends Target<T> implements Serializable
      *
      * @param builders a collection of builder objects representing a graph
      * @return a graph corresponding to the input collection
+     * @throws IllegalArgumentException if {@code builders} is empty, contains
+     * repeated elements, contains builders with repeated keys, contains
+     * builders that reference builders outside the collection, or contains
+     * builders arranged in a cyclical graph
      */
     public static <U extends Task> Workflow<U> create(Collection<? extends WorkflowNode.Builder<U>> builders)
     {

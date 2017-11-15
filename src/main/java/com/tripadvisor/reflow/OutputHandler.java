@@ -81,6 +81,8 @@ public class OutputHandler
 
     /**
      * Removes the output of all tasks in a target.
+     *
+     * @throws IOException if an I/O error occurs
      */
     public void removeOutput(Target<?> target) throws IOException
     {
@@ -92,6 +94,7 @@ public class OutputHandler
      *
      * @param nodes the nodes for which to remove output
      * @param reason the reason for removing output
+     * @throws IOException if an I/O error occurs
      */
     void removeOutput(Collection<? extends WorkflowNode<?>> nodes, OutputRemovalReason reason) throws IOException
     {
@@ -138,6 +141,8 @@ public class OutputHandler
      * Removes potentially out-of-date output of all tasks in a target.
      * Output is removed if the output of a direct or indirect dependency
      * is more recent.
+     *
+     * @throws IOException if an I/O error occurs during validation or removal
      */
     public void removeInvalidOutput(Target<?> target) throws IOException
     {
@@ -153,6 +158,8 @@ public class OutputHandler
      * <p>Returns a map of output to validated timestamp (where out-of-date or
      * missing outputs are indicated by {@link Instant#MAX}) and a list of
      * nodes that had out-of-date output.</p>
+     *
+     * @throws IOException if an I/O error occurs
      */
     <T extends Task> InvalidationResult<T> invalidateOutput(Collection<WorkflowNode<T>> targetNodes) throws IOException
     {

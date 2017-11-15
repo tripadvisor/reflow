@@ -33,14 +33,17 @@ class WorkflowSubset<T extends Task> extends Target<T> implements Serializable
     }
 
     /**
-     * Returns a target for the given nodes plus dependents. All of the given
-     * nodes must be included in the given target. Dependents are defined over
-     * the subgraph induced by the nodes in the given target.
+     * Returns a target for the given non-empty collection of nodes plus
+     * dependents. All of the given nodes must be included in the given target.
+     * Dependents are defined over the subgraph induced by the nodes in the
+     * given target.
      *
      * @param universe a target defining the subgraph over which dependents
      *                 will be calculated
      * @param nodes nodes defining the boundary of the returned target
      * @return a target for the given nodes plus dependents in the given target
+     * @throws IllegalArgumentException if {@code nodes} is empty or contains
+     * nodes not present in {@code universe}
      */
     public static <U extends Task> Target<U> subsetBeginningAt(Target<U> universe, Collection<WorkflowNode<U>> nodes)
     {
@@ -48,15 +51,18 @@ class WorkflowSubset<T extends Task> extends Target<T> implements Serializable
     }
 
     /**
-     * Returns a target for the given nodes plus dependencies. All of the given
-     * nodes must be included in the given target. Dependencies are defined over
-     * the subgraph induced by the nodes in the given target.
+     * Returns a target for the given non-empty collection of nodes plus
+     * dependencies. All of the given nodes must be included in the given
+     * target. Dependencies are defined over the subgraph induced by the
+     * nodes in the given target.
      *
      * @param universe a target defining the subgraph over which dependencies
      *                 will be calculated
      * @param nodes nodes defining the boundary of the returned target
      * @return a target for the given nodes
      * plus dependencies in the given target
+     * @throws IllegalArgumentException if {@code nodes} is empty or contains
+     * nodes not present in {@code universe}
      */
     public static <U extends Task> Target<U> subsetEndingAt(Target<U> universe, Collection<WorkflowNode<U>> nodes)
     {
@@ -93,7 +99,7 @@ class WorkflowSubset<T extends Task> extends Target<T> implements Serializable
 
         Preconditions.checkArgument(!nodesCopy.isEmpty(), "Target must contain at least one node");
         Preconditions.checkArgument(nodesCopy.stream().allMatch(target::containsNode),
-                                    "Target nodes must belong to the given workflow");
+                                    "Target nodes must belong to the parent target");
 
         return nodesCopy;
     }

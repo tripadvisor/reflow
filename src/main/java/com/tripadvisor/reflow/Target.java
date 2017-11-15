@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.Map;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
 
@@ -36,14 +37,15 @@ public abstract class Target<T extends Task> implements Serializable
     /**
      * Returns a target for the given nodes plus dependents. All of the given
      * nodes must be included in this target. Dependents are defined over the
-     * subgraph containing all the nodes in this target and all edges
-     * connecting those nodes.
+     * subgraph induced by the nodes in this target rather than the graph
+     * represented by the overall workflow.
      *
      * <p>For example, if {@code A} is a node passed to this method and
      * {@code B} is a dependent of {@code A}, {@code B} will be included in
      * the returned target if and only if it is included in this target.</p>
      *
-     * @return A target for the given nodes plus dependents in this target
+     * @return a target for the given nodes plus dependents in this target
+     * @throws IllegalArgumentException if any nodes are not in this target
      */
     @SafeVarargs
     public final Target<T> startingFrom(WorkflowNode<T> node, WorkflowNode<T>... moreNodes)
@@ -52,16 +54,18 @@ public abstract class Target<T extends Task> implements Serializable
     }
 
     /**
-     * Returns a target for the given nodes plus dependents. All of the given
-     * nodes must be included in this target. Dependents are defined over the
-     * subgraph containing all the nodes in this target and all edges
-     * connecting those nodes.
+     * Returns a target for the given non-empty collection of nodes plus
+     * dependents. All of the given nodes must be included in this target.
+     * Dependents are defined over the subgraph induced by the nodes in this
+     * target rather than the graph represented by the overall workflow.
      *
      * <p>For example, if {@code A} is a node passed to this method and
      * {@code B} is a dependent of {@code A}, {@code B} will be included in
      * the returned target if and only if it is included in this target.</p>
      *
-     * @return A target for the given nodes plus dependents in this target
+     * @return a target for the given nodes plus dependents in this target
+     * @throws IllegalArgumentException if {@code nodes} is empty or if
+     * any nodes are not in this target
      */
     public Target<T> startingFrom(Collection<WorkflowNode<T>> nodes)
     {
@@ -71,12 +75,13 @@ public abstract class Target<T extends Task> implements Serializable
 
     /**
      * Returns a target for the nodes with the given keys plus dependent
-     * nodes. All of the given keys must correspond to nodes in this target.
-     * Dependents are defined over the subgraph containing all the nodes in
-     * this target and all edges connecting those nodes.
+     * nodes. All keys must correspond to nodes in this target. Dependents
+     * are defined over the subgraph induced by the nodes in this target rather
+     * than the graph represented by the overall workflow.
      *
-     * @return A target for the nodes with given keys
+     * @return a target for the nodes with given keys
      * plus dependent nodes in this target
+     * @throws IllegalArgumentException if any keys are not in this target
      * @see #startingFrom(WorkflowNode, WorkflowNode[])
      */
     public Target<T> startingFromKeys(String key, String... moreKeys)
@@ -86,30 +91,36 @@ public abstract class Target<T extends Task> implements Serializable
 
     /**
      * Returns a target for the nodes with the given keys plus dependent
-     * nodes. All of the given keys must correspond to nodes in this target.
-     * Dependents are defined over the subgraph containing all the nodes in
-     * this target and all edges connecting those nodes.
+     * nodes. The given collection must not be empty, and all keys must
+     * correspond to nodes in this target. Dependents are defined over the
+     * subgraph induced by the nodes in this target rather than the graph
+     * represented by the overall workflow.
      *
-     * @return A target for the nodes with given keys
+     * @return a target for the nodes with given keys
      * plus dependent nodes in this target
+     * @throws IllegalArgumentException if {@code keys} is empty or if
+     * any keys are not in this target
      * @see #startingFrom(Collection)
      */
     public Target<T> startingFromKeys(Collection<String> keys)
     {
+        Preconditions.checkArgument(keys.stream().allMatch(getNodes()::containsKey),
+                                    "Target nodes must belong to the parent target");
         return startingFrom(Collections2.transform(keys, getNodes()::get));
     }
 
     /**
      * Returns a target for the given nodes plus dependencies. All of the given
      * nodes must be included in this target. Dependencies are defined over the
-     * subgraph containing all the nodes in this target and all edges
-     * connecting those nodes.
+     * subgraph induced by the nodes in this target rather than the graph
+     * represented by the overall workflow.
      *
      * <p>For example, if {@code A} is a node passed to this method and
      * {@code B} is a dependency of {@code A}, {@code B} will be included in
      * the returned target if and only if it is included in this target.</p>
      *
-     * @return A target for the given nodes plus dependencies in this target
+     * @return a target for the given nodes plus dependencies in this target
+     * @throws IllegalArgumentException if any nodes are not in this target
      */
     @SafeVarargs
     public final Target<T> stoppingAfter(WorkflowNode<T> node, WorkflowNode<T>... moreNodes)
@@ -118,16 +129,18 @@ public abstract class Target<T extends Task> implements Serializable
     }
 
     /**
-     * Returns a target for the given nodes plus dependencies. All of the given
-     * nodes must be included in this target. Dependencies are defined over the
-     * subgraph containing all the nodes in this target and all edges
-     * connecting those nodes.
+     * Returns a target for the given non-empty collection of nodes plus
+     * dependencies. All of the given nodes must be included in this target.
+     * Dependencies are defined over the subgraph induced by the nodes in this
+     * target rather than the graph represented by the overall workflow.
      *
      * <p>For example, if {@code A} is a node passed to this method and
      * {@code B} is a dependency of {@code A}, {@code B} will be included in
      * the returned target if and only if it is included in this target.</p>
      *
-     * @return A target for the given nodes plus dependencies in this target
+     * @return a target for the given nodes plus dependencies in this target
+     * @throws IllegalArgumentException if {@code nodes} is empty or if
+     * any nodes are not in this target
      */
     public Target<T> stoppingAfter(Collection<WorkflowNode<T>> nodes)
     {
@@ -136,12 +149,13 @@ public abstract class Target<T extends Task> implements Serializable
 
     /**
      * Returns a target for the nodes with the given keys plus dependency
-     * nodes. All of the given keys must correspond to nodes in this target.
-     * Dependencies are defined over the subgraph containing all the nodes in
-     * this target and all edges connecting those nodes.
+     * nodes. All keys must correspond to nodes in this target. Dependencies
+     * are defined over the subgraph induced by the nodes in this target rather
+     * than the graph represented by the overall workflow.
      *
      * @return A target for the nodes with given keys
      * plus dependency nodes in this target
+     * @throws IllegalArgumentException if any keys are not in this target
      * @see #stoppingAfter(WorkflowNode, WorkflowNode[])
      */
     public Target<T> stoppingAfterKeys(String key, String... moreKeys)
@@ -151,16 +165,21 @@ public abstract class Target<T extends Task> implements Serializable
 
     /**
      * Returns a target for the nodes with the given keys plus dependency
-     * nodes. All of the given keys must correspond to nodes in this target.
-     * Dependencies are defined over the subgraph containing all the nodes in
-     * this target and all edges connecting those nodes.
+     * nodes. The given collection must not be empty, and all keys must
+     * correspond to nodes in this target. Dependencies are defined over
+     * the subgraph induced by the nodes in this target rather than the graph
+     * represented by the overall workflow.
      *
      * @return A target for the nodes with given keys
      * plus dependency nodes in this target
+     * @throws IllegalArgumentException if {@code keys} is empty or if
+     * any keys are not in this target
      * @see #stoppingAfter(Collection)
      */
     public Target<T> stoppingAfterKeys(Collection<String> keys)
     {
+        Preconditions.checkArgument(keys.stream().allMatch(getNodes()::containsKey),
+                                    "Target nodes must belong to the parent target");
         return stoppingAfter(Collections2.transform(keys, getNodes()::get));
     }
 }

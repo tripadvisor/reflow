@@ -14,11 +14,15 @@ public interface Output
     /**
      * Returns the time at which this output was created,
      * or an empty optional if the output does not exist.
+     *
+     * @throws IOException if an I/O error occurs
      */
     Optional<Instant> getTimestamp() throws IOException;
 
     /**
      * Deletes this output if it exists.
+     *
+     * @throws IOException if an I/O error occurs
      */
     void delete() throws IOException;
 }

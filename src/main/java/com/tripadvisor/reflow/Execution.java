@@ -150,6 +150,8 @@ public class Execution<T extends Task>
      * <p>Equivalent to calling
      * {@link #newExecutionFromExistingOutput(Target, TaskScheduler, OutputHandler)},
      * supplying {@link OutputHandler#create()} as the third parameter.</p>
+     *
+     * @throws IOException if an I/O error occurs during output validation
      */
     public static <U extends Task> Execution<U> newExecutionFromExistingOutput(Target<U> target,
                                                                                TaskScheduler<? super U> scheduler)
@@ -171,6 +173,8 @@ public class Execution<T extends Task>
      * is out of-date). Finally, the set is repeatedly expanded to include
      * direct dependencies without existing output, stopping when no such
      * dependencies exist.</p>
+     *
+     * @throws IOException if an I/O error occurs during output validation
      */
     public static <U extends Task> Execution<U> newExecutionFromExistingOutput(Target<U> target,
                                                                                TaskScheduler<? super U> scheduler,
