@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -16,7 +17,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 
 import static java.util.stream.Collectors.toMap;
@@ -46,14 +47,14 @@ public class OutputHandler
      *
      * Nodes with no associated task are mapped to an empty set of outputs.
      */
-    private final LoadingCache<WorkflowNode<?>, Set<Output>> m_outputCache = CacheBuilder.newBuilder()
+    private final LoadingCache<WorkflowNode<?>, Collection<Output>> m_outputCache = CacheBuilder.newBuilder()
             .weakKeys()
-            .build(new CacheLoader<WorkflowNode<?>, Set<Output>>()
+            .build(new CacheLoader<WorkflowNode<?>, Collection<Output>>()
             {
                 @Override
-                public Set<Output> load(WorkflowNode<?> node)
+                public Collection<Output> load(WorkflowNode<?> node)
                 {
-                    return node.hasTask() ? ImmutableSet.copyOf(node.getTask().getOutputs()) : ImmutableSet.of();
+                    return node.hasTask() ? ImmutableList.copyOf(node.getTask().getOutputs()) : ImmutableList.of();
                 }
             });
 
@@ -165,8 +166,7 @@ public class OutputHandler
     {
         // Cache output timestamps
         // Replace nulls with Instant.MAX (treat outputs that haven't been created yet as newer than anything else)
-        Map<Output, Instant> timestamps = Maps.newHashMapWithExpectedSize(
-                targetNodes.stream().mapToInt(node -> m_outputCache.getUnchecked(node).size()).sum());
+        Map<Output, Instant> timestamps = new HashMap<>();
         for (WorkflowNode<T> node : targetNodes)
         {
             for (Output output : m_outputCache.getUnchecked(node))
