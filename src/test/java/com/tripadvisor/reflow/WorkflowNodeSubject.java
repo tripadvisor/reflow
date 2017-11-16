@@ -48,9 +48,9 @@ final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubj
     public void hasEventualDependency(WorkflowNode<T> dependency)
     {
         Preconditions.checkNotNull(dependency);
-        check().withFailureMessage("%s is not a dependency of itself", actual())
+        check().withMessage("%s is not a dependency of itself", actual())
                 .that(actual()).isNotEqualTo(dependency);
-        check().withFailureMessage("%s should have eventual dependency %s", actual(), dependency)
+        check().withMessage("%s should have eventual dependency %s", actual(), dependency)
                 .that(nodeReachableFromSubject(dependency, node -> node.getDependencies().iterator())).isTrue();
     }
 
@@ -61,7 +61,7 @@ final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubj
     public void doesNotHaveEventualDependency(WorkflowNode<T> dependency)
     {
         Preconditions.checkNotNull(dependency);
-        check().withFailureMessage("%s should not have eventual dependency %s", actual(), dependency)
+        check().withMessage("%s should not have eventual dependency %s", actual(), dependency)
                 .that(nodeReachableFromSubject(dependency, node -> node.getDependencies().iterator())).isFalse();
     }
 
@@ -85,7 +85,7 @@ final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubj
         Set<WorkflowNode<T>> actualPlusDependencies = TraversalUtils.collectNodes(ImmutableSet.of(actual()),
                                                                                   WorkflowNode::getDependencies);
 
-        check().withFailureMessage("Not true that %s has %s eventual dependencies", actual(), count)
+        check().withMessage("Not true that %s has %s eventual dependencies", actual(), count)
                 .that(actualPlusDependencies).hasSize(count + 1);
     }
 
@@ -100,7 +100,7 @@ final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubj
         Set<WorkflowNode<T>> actualPlusDependents = TraversalUtils.collectNodes(ImmutableSet.of(actual()),
                                                                                 WorkflowNode::getDependents);
 
-        check().withFailureMessage("Not true that %s has %s eventual dependents", actual(), count)
+        check().withMessage("Not true that %s has %s eventual dependents", actual(), count)
                 .that(actualPlusDependents).hasSize(count + 1);
     }
 }

@@ -10,6 +10,7 @@ import com.google.common.truth.FailureStrategy;
 import com.google.common.truth.Subject;
 import com.google.common.truth.SubjectFactory;
 
+import static com.google.common.truth.OptionalSubject.optionals;
 import static com.google.common.truth.Truth.assertAbout;
 
 /**
@@ -50,7 +51,7 @@ final class TestTaskSubject extends Subject<TestTaskSubject, TestTask>
     {
         for (TestOutput output : actual().getTestOutputs())
         {
-            check().withFailureMessage("%s should not have written output %s", actual(), output)
+            check().withMessage("%s should not have written output %s", actual(), output)
                     .that(output.getTimestamp().isPresent()).isFalse();  // Not clear how to use OptionalSubject here
         }
     }
@@ -66,7 +67,7 @@ final class TestTaskSubject extends Subject<TestTaskSubject, TestTask>
         for (TestOutput output : actual().getTestOutputs())
         {
             output.getTimestamp().ifPresent(timestamp -> check()
-                    .withFailureMessage("%s should not have written output %s inside %s",
+                    .withMessage("%s should not have written output %s inside %s",
                                         actual(), output, timestampRange)
                     .that(timestamp).isNotIn(timestampRange));
         }
@@ -83,9 +84,9 @@ final class TestTaskSubject extends Subject<TestTaskSubject, TestTask>
         for (TestOutput output : actual().getTestOutputs())
         {
             Optional<Instant> timestamp = output.getTimestamp();
-            check().withFailureMessage("%s should have written output %s", actual(), output)
-                    .that(timestamp.isPresent()).isTrue();  // Not clear how to use OptionalSubject here
-            check().withFailureMessage("%s should have written output %s inside %s", actual(), output, timestampRange)
+            check().withMessage("%s should have written output %s", actual(), output).about(optionals())
+                    .that(timestamp).isPresent();
+            check().withMessage("%s should have written output %s inside %s", actual(), output, timestampRange)
                     .that(timestamp.get()).isIn(timestampRange);
         }
     }
