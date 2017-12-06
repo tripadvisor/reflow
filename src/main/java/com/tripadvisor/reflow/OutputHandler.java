@@ -7,9 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -119,15 +117,15 @@ public class OutputHandler
         }
         else
         {
-            Map<WorkflowNode<?>, Set<Output>> outputMap = nodes.stream()
+            Map<WorkflowNode<?>, Collection<Output>> outputMap = nodes.stream()
                     .filter(WorkflowNode::hasTask)
-                    .collect(toMap(Function.identity(), node -> new HashSet<>(node.getTask().getOutputs())));
+                    .collect(toMap(Function.identity(), node -> new ArrayList<>(node.getTask().getOutputs())));
 
             if (!outputMap.isEmpty())
             {
                 m_outputRemovalFilter.filterRemovals(outputMap, reason);
 
-                for (Set<Output> outputs : outputMap.values())
+                for (Collection<Output> outputs : outputMap.values())
                 {
                     for (Output output : outputs)
                     {

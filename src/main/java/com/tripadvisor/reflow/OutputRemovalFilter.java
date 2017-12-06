@@ -1,7 +1,7 @@
 package com.tripadvisor.reflow;
 
+import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Logic for preserving output when it would otherwise be removed.
@@ -17,5 +17,5 @@ public interface OutputRemovalFilter
      * @param outputs outputs slated for removal, grouped by associated node
      * @param reason the reason outputs are being removed
      */
-    void filterRemovals(Map<WorkflowNode<?>, Set<Output>> outputs, OutputRemovalReason reason);
+    void filterRemovals(Map<WorkflowNode<?>, Collection<Output>> outputs, OutputRemovalReason reason);
 }
