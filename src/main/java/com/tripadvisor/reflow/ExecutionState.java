@@ -15,9 +15,8 @@ public enum ExecutionState
     /**
      * Execution is ready to start.
      *
-     * <p>Note that this state refers only to the idleness of the scheduling
-     * loop, and tasks that have been scheduled but not completed may continue
-     * to run.</p>
+     * <p>Note that this state indicates only that the scheduling loop is idle.
+     * Tasks that have been scheduled but not completed may continue to run.</p>
      */
     IDLE,
 

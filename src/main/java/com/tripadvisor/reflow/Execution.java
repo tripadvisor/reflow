@@ -409,7 +409,7 @@ public class Execution<T extends Task>
 
     /**
      * Shuts down this execution and returns immediately. Scheduled tasks will
-     * continue to run, no new tasks will be scheduled. The current call to
+     * continue to run, but no new tasks will be scheduled. The current call to
      * {@link #run()} will return when all scheduled tasks have completed.
      *
      * <p>If it does not coincide with a call to {@link #run()}, this method
@@ -434,7 +434,10 @@ public class Execution<T extends Task>
     /**
      * Interrupts this execution and returns immediately. The current call to
      * {@link #run()} should return shortly afterwards, possibly with an
-     * {@link InterruptedException}. Scheduled tasks may continue to run.
+     * {@link InterruptedException}. Scheduled tasks are not intentionally
+     * interrupted (but keep in mind that if this execution is backed by a
+     * synchronous task scheduler, the interrupted scheduler thread could
+     * be in the middle of executing a task).
      *
      * <p>If it does not coincide with a call to {@link #run()}, this method
      * has no effect.</p>
