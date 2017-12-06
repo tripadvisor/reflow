@@ -20,6 +20,8 @@ import static com.google.common.collect.Maps.toImmutableEnumMap;
  */
 public abstract class NodeStatus implements Serializable
 {
+    private static final long serialVersionUID = 0L;
+
     /**
      * Returns the state of the associated node.
      */
