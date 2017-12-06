@@ -286,6 +286,11 @@ public class Execution<T extends Task>
      * <p>The returned snapshot is guaranteed to be consistent. However, it can
      * quickly become out-of-date if the execution is running, or if any tasks
      * have been scheduled but not completed.</p>
+     *
+     * <p>If any tasks are in the process of being scheduled (the scheduler's
+     * {@link TaskScheduler#submit(Object, TaskCompletionCallback) submit}
+     * method has been called but has not yet returned a token), the associated
+     * nodes will be marked {@link NodeState#READY READY}.</p>
      */
     public FrozenExecution<T> freeze()
     {
@@ -455,13 +460,10 @@ public class Execution<T extends Task>
     {
         for (WorkflowNode<T> node : m_nodesByState.get(NodeState.SCHEDULED))
         {
-            if (node.hasTask())
-            {
-                TaskNode<T> taskNode = (TaskNode<T>) node;
-                Optional<ScheduledTaskToken> token = m_nodeStatuses.get(node).getToken();
-                assert token.isPresent() : "Missing token";
-                m_scheduler.registerCallback(token.get(), new WeakCallback(new QueueingCallback(taskNode)));
-            }
+            Optional<ScheduledTaskToken> token = m_nodeStatuses.get(node).getToken();
+            assert node.hasTask() : "Scheduled structure node";
+            assert token.isPresent() : "Missing token";
+            m_scheduler.registerCallback(token.get(), new WeakCallback(new QueueingCallback((TaskNode<T>) node)));
         }
     }
 
@@ -507,21 +509,17 @@ public class Execution<T extends Task>
                 // To begin with, set the state to SCHEDULED with no token.
                 updateStatus(node, NodeState.SCHEDULED);
 
-                // Try submitting the node. If the task executor implementation blows up or gives
-                // us a null token, mark the node as FAILED: we don't want SCHEDULED nodes with
-                // tasks but no tokens piling up on us. We could also remove task output but it's
-                // really the task executor that failed, not the task.
+                // Submit the task, temporarily releasing the lock in case submit() blocks
                 ScheduledTaskToken token;
+                m_lock.unlock();
                 try
                 {
                     token = m_scheduler.submit(node.getTask(),
                                                new WeakCallback(new QueueingCallback((TaskNode<T>) node)));
-                    Preconditions.checkNotNull(token, "Null token");
                 }
-                catch (Exception e)
+                finally
                 {
-                    updateStatus(node, NodeState.FAILED);
-                    throw e;
+                    m_lock.lock();
                 }
 
                 // Only update state if submit() didn't do it for us

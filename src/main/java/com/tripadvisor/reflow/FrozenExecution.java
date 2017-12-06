@@ -5,10 +5,10 @@ import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 
 /**
  * An immutable, serializable snapshot of an {@link Execution}.
@@ -45,16 +45,20 @@ public class FrozenExecution<T extends Task> implements Serializable
 
     static <U extends Task> FrozenExecution<U> of(Workflow<U> workflow, Map<WorkflowNode<U>, NodeStatus> nodeStates)
     {
-        ImmutableMap<WorkflowNode<U>, NodeStatus> nodeStatesCopy = ImmutableMap.copyOf(nodeStates);
+        ImmutableMap<WorkflowNode<U>, NodeStatus> nodeStatesCopy = ImmutableMap.copyOf(Maps.transformEntries(
+                nodeStates,
+                (node, status) -> node.hasTask()
+                        && status.getState().equals(NodeState.SCHEDULED)
+                        && !status.getToken().isPresent() ? NodeStatus.withoutToken(NodeState.READY) : status
+        ));
         
-        Preconditions.checkArgument(workflow.getNodeSet().equals(nodeStatesCopy.keySet()));
-        for (Entry<WorkflowNode<U>, NodeStatus> e : nodeStatesCopy.entrySet())
-        {
-            if (e.getKey().hasTask() && e.getValue().getState().equals(NodeState.SCHEDULED))
-            {
-                Preconditions.checkArgument(e.getValue().getToken().isPresent(), "Missing token");
-            }
-        }
+        Preconditions.checkArgument(workflow.getNodeSet().equals(nodeStatesCopy.keySet()),
+                                    "Node set does not match workflow");
+
+        Preconditions.checkArgument(nodeStatesCopy.entrySet().stream()
+                                            .filter(e -> !e.getKey().hasTask())
+                                            .noneMatch(e -> e.getValue().getState().equals(NodeState.SCHEDULED)),
+                                    "Structure nodes cannot be scheduled");
 
         return new FrozenExecution<>(workflow, nodeStatesCopy);
     }
