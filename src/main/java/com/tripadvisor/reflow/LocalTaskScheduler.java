@@ -16,13 +16,13 @@
 
 package com.tripadvisor.reflow;
 
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.FutureTask;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.google.common.base.Preconditions;
@@ -37,7 +37,7 @@ public class LocalTaskScheduler<T> implements TaskScheduler<T>
 {
     private final Executor m_executor;
     private final Function<T, ? extends Runnable> m_taskToRunnableFunc;
-    private final ConcurrentMap<ScheduledTaskToken, CallReturningFuture> m_futures = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ScheduledTaskToken, CompletionStage<Void>> m_futures = new ConcurrentHashMap<>();
 
     private LocalTaskScheduler(Executor executor, Function<T, ? extends Runnable> taskToRunnableFunc)
     {
@@ -71,13 +71,11 @@ public class LocalTaskScheduler<T> implements TaskScheduler<T>
     @Override
     public ScheduledTaskToken submit(T task, TaskCompletionCallback callback)
     {
-        CallReturningFuture future = new CallReturningFuture(m_taskToRunnableFunc.apply(task));
-        future.addCallback(callback);
+        CompletionStage<Void> future = CompletableFuture.runAsync(m_taskToRunnableFunc.apply(task), m_executor);
+        future.handle(makeHandler(callback));
 
         ScheduledTaskToken token = new ScheduledTaskToken() {};
         m_futures.put(token, future);
-        m_executor.execute(future);
-
         return token;
     }
 
@@ -87,76 +85,33 @@ public class LocalTaskScheduler<T> implements TaskScheduler<T>
     @Override
     public void registerCallback(ScheduledTaskToken token, TaskCompletionCallback callback) throws InvalidTokenException
     {
-        CallReturningFuture future = m_futures.get(token);
+        CompletionStage<Void> future = m_futures.get(token);
         if (future == null)
         {
             throw new InvalidTokenException();
         }
-        future.addCallback(callback);
+        future.handle(makeHandler(callback));
     }
 
-    private static class CallReturningFuture extends FutureTask<Void>
+    private BiFunction<Void, Throwable, Void> makeHandler(TaskCompletionCallback callback)
     {
-        private Collection<TaskCompletionCallback> m_callbacks = new ArrayList<>(1);
-
-        public CallReturningFuture(Runnable runnable)
+        return (v, t) ->
         {
-            super(runnable, null);
-        }
-
-        public synchronized void addCallback(TaskCompletionCallback callback)
-        {
-            Preconditions.checkNotNull(callback);
-
-            if (isDone())
-            {
-                try
-                {
-                    get();
-                    callback.reportSuccess();
-                }
-                catch (ExecutionException e)
-                {
-                    // Unfortunately, to access the actual failure cause, we have to wrap it
-                    // via a call to get(), catch the wrapper, and unwrap it here
-                    callback.reportFailure(e.getCause());
-                }
-                catch (InterruptedException e)
-                {
-                    // Because isDone() returned true, this future must be completed or be in the process
-                    // of being completed. The latter can only be true while the superclass methods set()
-                    // and setException() are executing, which can't coincide with a call to this method
-                    // due to synchronization. Therefore, this future must be completed and the call to
-                    // get() should immediately return.
-                    throw new AssertionError("Unexpected interrupt", e);
-                }
-            }
-            else
-            {
-                m_callbacks.add(callback);
-            }
-        }
-
-        @Override
-        protected synchronized void set(Void v)
-        {
-            super.set(v);
-            for (TaskCompletionCallback callback : m_callbacks)
+            if (t == null)
             {
                 callback.reportSuccess();
             }
-            m_callbacks = null;
-        }
-
-        @Override
-        protected synchronized void setException(Throwable t)
-        {
-            super.setException(t);
-            for (TaskCompletionCallback callback : m_callbacks)
+            else if (t instanceof CompletionException && t.getCause() != null)
+            {
+                // The CompletionStage docs suggest that we should get the raw exception,
+                // but in practice we get it wrapped in a CompletionException
+                callback.reportFailure(t.getCause());
+            }
+            else
             {
                 callback.reportFailure(t);
             }
-            m_callbacks = null;
-        }
+            return null;
+        };
     }
 }
