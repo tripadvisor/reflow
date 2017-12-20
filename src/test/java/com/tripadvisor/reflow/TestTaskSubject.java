@@ -22,9 +22,8 @@ import java.util.Optional;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Range;
-import com.google.common.truth.FailureStrategy;
+import com.google.common.truth.FailureMetadata;
 import com.google.common.truth.Subject;
-import com.google.common.truth.SubjectFactory;
 
 import static com.google.common.truth.OptionalSubject.optionals;
 import static com.google.common.truth.Truth.assertAbout;
@@ -34,9 +33,9 @@ import static com.google.common.truth.Truth.assertAbout;
  */
 final class TestTaskSubject extends Subject<TestTaskSubject, TestTask>
 {
-    private TestTaskSubject(FailureStrategy failureStrategy, @Nullable TestTask actual)
+    private TestTaskSubject(FailureMetadata metadata, @Nullable TestTask actual)
     {
-        super(failureStrategy, actual);
+        super(metadata, actual);
     }
 
     public static TestTaskSubject assertThat(TestTask task)
@@ -44,21 +43,10 @@ final class TestTaskSubject extends Subject<TestTaskSubject, TestTask>
         return assertAbout(tasks()).that(task);
     }
 
-    public static SubjectFactory<TestTaskSubject, TestTask> tasks()
+    public static Subject.Factory<TestTaskSubject, TestTask> tasks()
     {
-        return TEST_TASK_SUBJECT_FACTORY;
+        return TestTaskSubject::new;
     }
-
-    private static final SubjectFactory<TestTaskSubject, TestTask> TEST_TASK_SUBJECT_FACTORY =
-            new SubjectFactory<TestTaskSubject, TestTask>()
-            {
-                @Override
-                public TestTaskSubject getSubject(FailureStrategy failureStrategy, TestTask target)
-                {
-                    return new TestTaskSubject(failureStrategy, target);
-                }
-            };
-
 
     /**
      * Fails if any of the subject's output is present.
@@ -67,8 +55,8 @@ final class TestTaskSubject extends Subject<TestTaskSubject, TestTask>
     {
         for (TestOutput output : actual().getTestOutputs())
         {
-            check().withMessage("%s should not have written output %s", actual(), output)
-                    .that(output.getTimestamp().isPresent()).isFalse();  // Not clear how to use OptionalSubject here
+            check().withMessage("%s should not have written output %s", actual(), output).about(optionals())
+                    .that(output.getTimestamp()).isEmpty();
         }
     }
 

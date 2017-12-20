@@ -25,9 +25,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
-import com.google.common.truth.FailureStrategy;
+import com.google.common.truth.FailureMetadata;
 import com.google.common.truth.Subject;
-import com.google.common.truth.SubjectFactory;
 import com.google.common.truth.Truth;
 
 /**
@@ -35,9 +34,9 @@ import com.google.common.truth.Truth;
  */
 final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubject<T>, WorkflowNode<T>>
 {
-    private WorkflowNodeSubject(FailureStrategy failureStrategy, @Nullable WorkflowNode<T> actual)
+    private WorkflowNodeSubject(FailureMetadata metadata, @Nullable WorkflowNode<T> actual)
     {
-        super(failureStrategy, actual);
+        super(metadata, actual);
     }
 
     public static <U extends Task> WorkflowNodeSubject<U> assertThat(WorkflowNode<U> node)
@@ -45,16 +44,9 @@ final class WorkflowNodeSubject<T extends Task> extends Subject<WorkflowNodeSubj
         return Truth.<WorkflowNodeSubject<U>, WorkflowNode<U>>assertAbout(nodes()).that(node);
     }
 
-    public static <U extends Task> SubjectFactory<WorkflowNodeSubject<U>, WorkflowNode<U>> nodes()
+    public static <U extends Task> Subject.Factory<WorkflowNodeSubject<U>, WorkflowNode<U>> nodes()
     {
-        return new SubjectFactory<WorkflowNodeSubject<U>, WorkflowNode<U>>()
-        {
-            @Override
-            public WorkflowNodeSubject<U> getSubject(FailureStrategy failureStrategy, WorkflowNode<U> target)
-            {
-                return new WorkflowNodeSubject<>(failureStrategy, target);
-            }
-        };
+        return WorkflowNodeSubject::new;
     }
 
     /**

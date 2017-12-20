@@ -17,8 +17,8 @@ dependencies {
     implementation 'com.google.errorprone:error_prone_annotations:2.1.2'
 
     testImplementation 'org.testng:testng:6.11'
-    testImplementation 'com.google.truth:truth:0.36'
-    testImplementation 'com.google.truth.extensions:truth-java8-extension:0.36'
+    testImplementation 'com.google.truth:truth:0.37'
+    testImplementation 'com.google.truth.extensions:truth-java8-extension:0.37'
 }
 
 test {
