@@ -208,7 +208,7 @@ public class Execution<T extends Task>
             {
                 return true;
             }
-            Collection<Output> outputs = node.getTask().getOutputs();
+            Collection<Output> outputs = outputHandler.getCachedOutputs(node);
             return outputs.isEmpty() || outputs.stream()
                     .map(timestamps::get)
                     .anyMatch(Predicate.isEqual(Instant.MAX));

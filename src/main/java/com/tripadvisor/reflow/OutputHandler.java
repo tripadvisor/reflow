@@ -183,7 +183,7 @@ public class OutputHandler
         Map<Output, Instant> timestamps = new HashMap<>();
         for (WorkflowNode<T> node : targetNodes)
         {
-            for (Output output : m_outputCache.getUnchecked(node))
+            for (Output output : getCachedOutputs(node))
             {
                 timestamps.put(output, output.getTimestamp().orElse(Instant.MAX));
             }
@@ -200,7 +200,7 @@ public class OutputHandler
                     .filter(targetNodes::contains)
                     .flatMap(dependency -> Stream.concat(
                             // Consider the timestamps of the output of each direct dependency...
-                            m_outputCache.getUnchecked(dependency).stream().map(timestamps::get),
+                            getCachedOutputs(dependency).stream().map(timestamps::get),
                             // ...and indirect dependency
                             Stream.of(maxDependencyTimestamps.get(dependency))
                     ))
@@ -210,7 +210,7 @@ public class OutputHandler
             maxDependencyTimestamps.put(node, maxDependencyTimestamp);
 
             // Calculate the least recent timestamp associated with the output of this node
-            Instant minOutputTimestamp = m_outputCache.getUnchecked(node).stream()
+            Instant minOutputTimestamp = getCachedOutputs(node).stream()
                     .map(timestamps::get)
                     .min(Comparator.naturalOrder())
                     .orElse(Instant.MAX);
@@ -220,7 +220,7 @@ public class OutputHandler
             if (node.hasTask() && maxDependencyTimestamp.compareTo(minOutputTimestamp) > 0)
             {
                 invalidNodes.add(node);
-                for (Output output : m_outputCache.getUnchecked(node))
+                for (Output output : getCachedOutputs(node))
                 {
                     timestamps.put(output, Instant.MAX);
                 }
@@ -228,6 +228,16 @@ public class OutputHandler
         }
 
         return new InvalidationResult<>(timestamps, invalidNodes);
+    }
+
+    /**
+     * Returns the cached output instances associated with the given node.
+     * These instances are used to key the validated timestamps map in an
+     * {@link InvalidationResult}.
+     */
+    Collection<Output> getCachedOutputs(WorkflowNode<?> node)
+    {
+        return m_outputCache.getUnchecked(node);
     }
 
     static class InvalidationResult<T extends Task>

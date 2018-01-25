@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableSet;
 
 final class TestTask implements Task, Runnable
@@ -75,7 +76,8 @@ final class TestTask implements Task, Runnable
     @Override
     public Set<Output> getOutputs()
     {
-        return ImmutableSet.copyOf(getTestOutputs());
+        // Wrap output instances each time to make sure we don't depend on object identity
+        return ImmutableSet.copyOf(Collections2.transform(getTestOutputs(), ForwardingOutput::new));
     }
 
     @Override
