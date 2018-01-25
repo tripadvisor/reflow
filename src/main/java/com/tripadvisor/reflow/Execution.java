@@ -19,6 +19,7 @@ package com.tripadvisor.reflow;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -482,7 +483,7 @@ public class Execution<T extends Task>
             Optional<ScheduledTaskToken> token = m_nodeStatuses.get(node).getToken();
             assert node.hasTask() : "Scheduled structure node";
             assert token.isPresent() : "Missing token";
-            m_scheduler.registerCallback(token.get(), new WeakCallback(new QueueingCallback((TaskNode<T>) node)));
+            m_scheduler.registerCallback(token.get(), new QueueingCallback<>(this, (TaskNode<T>) node));
         }
     }
 
@@ -533,8 +534,7 @@ public class Execution<T extends Task>
                 m_lock.unlock();
                 try
                 {
-                    token = m_scheduler.submit(node.getTask(),
-                                               new WeakCallback(new QueueingCallback((TaskNode<T>) node)));
+                    token = m_scheduler.submit(node.getTask(), new QueueingCallback<>(this, (TaskNode<T>) node));
                 }
                 finally
                 {
@@ -658,63 +658,70 @@ public class Execution<T extends Task>
      * Task completion callback that updates the state of the
      * corresponding node and wakes up the thread driving execution.
      */
-    private class QueueingCallback implements TaskCompletionCallback
+    private static class QueueingCallback<U extends Task> implements TaskCompletionCallback
     {
-        private final TaskNode<T> m_node;
+        private final WeakReference<Execution<U>> m_execution;
+        private final WeakReference<TaskNode<U>> m_node;
 
-        public QueueingCallback(TaskNode<T> node)
+        public QueueingCallback(Execution<U> execution, TaskNode<U> node)
         {
-            m_node = node;
+            m_execution = new WeakReference<>(execution);
+            m_node = new WeakReference<>(node);
         }
 
         @Override
         public void reportSuccess()
         {
-            queueResult(new TaskNodeCompletion<>(m_node, null, null), NodeState.SUCCEEDED);
+            queueResult(null, null, NodeState.SUCCEEDED);
         }
 
         @Override
         public void reportFailure()
         {
-            queueResult(new TaskNodeCompletion<>(m_node, null, null), NodeState.FAILED);
+            queueResult(null, null, NodeState.FAILED);
         }
 
         @Override
         public void reportFailure(String message)
         {
-            queueResult(new TaskNodeCompletion<>(m_node, Preconditions.checkNotNull(message), null), NodeState.FAILED);
+            queueResult(Preconditions.checkNotNull(message), null, NodeState.FAILED);
         }
 
         @Override
         public void reportFailure(String message, Throwable cause)
         {
-            queueResult(new TaskNodeCompletion<>(m_node,
-                                                 Preconditions.checkNotNull(message),
-                                                 Preconditions.checkNotNull(cause)),
-                        NodeState.FAILED);
+            queueResult(Preconditions.checkNotNull(message), Preconditions.checkNotNull(cause), NodeState.FAILED);
         }
 
         @Override
         public void reportFailure(Throwable cause)
         {
-            queueResult(new TaskNodeCompletion<>(m_node, null, Preconditions.checkNotNull(cause)), NodeState.FAILED);
+            queueResult(null, Preconditions.checkNotNull(cause), NodeState.FAILED);
         }
 
-        private void queueResult(TaskNodeCompletion<T> result, NodeState state)
+        private void queueResult(@Nullable String message, @Nullable Throwable cause, NodeState state)
         {
-            m_lock.lock();
+            Execution<U> execution = m_execution.get();
+            TaskNode<U> node = m_node.get();
+            if (execution == null)
+            {
+                return;
+            }
+            assert node != null;  // We already have a strong reference via the execution
+
+            execution.m_lock.lock();
             try
             {
-                if (m_nodeStatuses.get(m_node).getState().equals(NodeState.SCHEDULED))
+                if (execution.m_nodeStatuses.get(node).getState().equals(NodeState.SCHEDULED))
                 {
-                    updateStatus(m_node, state);
-                    m_taskNodeQueue.add(result);
-                    m_taskNodeAvailable.signal();
+                    execution.updateStatus(node, state);
+                    execution.m_taskNodeQueue.add(new TaskNodeCompletion<>(node, message, cause));
+                    execution.m_taskNodeAvailable.signal();
                 }
             }
             finally
             {
-                m_lock.unlock();
+                execution.m_lock.unlock();
             }
         }
     }
