@@ -100,10 +100,10 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
  */
 public class BuilderChain<T extends Task>
 {
-    private WorkflowNode.Builder<T> m_head = StructureNode.builder();
+    private final WorkflowNode.Builder<T> m_head = StructureNode.builder();
     private WorkflowNode.Builder<T> m_tail = StructureNode.builder();
 
-    private Set<WorkflowNode.Builder<T>> m_contents = new HashSet<>();
+    private final Set<WorkflowNode.Builder<T>> m_contents = new HashSet<>();
 
     private BuilderChain()
     {}
