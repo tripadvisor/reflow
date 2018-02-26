@@ -1,34 +1,42 @@
 # Reflow
 
-Reflow is a compact Java library for building graph-based workflows with
-checkpointing.
+Reflow is a Java library for building graph-based workflows.
 
-Here are some highlights:
+With support for parallel execution of tasks, custom scheduling backends, and
+intelligent resumption in the event of a failure, Reflow makes it easy to
+coordinate interdependent units of work. We use it internally to drive a variety
+of data ingestion and processing.
 
-- Declare arbitrary dependency relationships between individual tasks, then run
-  the whole workflow with maximal parallelism in a single method call
-
-- Run tasks in a single local thread or across multiple machines
-
-- Skip tasks that have already run when restarting
-
-- Serialize the state of a workflow, deserialize it somewhere else, and keep
-  right on trucking--without interrupting running tasks
-
-We use Reflow internally to drive a variety of data ingestion/processing jobs.
+Check out the [user guide][userguide] for a quick walkthrough.
 
 ## Getting started
 
-We hope to have everything available in Maven Central soon.
-JAR files are also available on the [releases page][releases].
+JARs can be downloaded from [Bintray JCenter][bintray] either manually or
+through your build system.
 
-Next, check out the [user guide][userguide].
+To add a dependency using Gradle:
+
+```
+dependencies {
+    compile 'com.tripadvisor.reflow:reflow:1.0.1'
+}
+```
+
+Using Maven:
+
+```
+<dependency>
+    <groupId>com.tripadvisor.reflow</groupId>
+    <artifactId>reflow</artifactId>
+    <version>1.0.1</version>
+</dependency>
+```
 
 ## License
 
 Reflow is licensed under the [Apache License, Version 2.0](LICENSE).
 
-Copyright (C) 2017 TripAdvisor LLC
+Copyright (C) 2018 TripAdvisor LLC
 
-[userguide]: https://github.com/tripadvisor/reflow/wiki/
-[releases]: https://github.com/tripadvisor/reflow/releases/
+[bintray]: https://bintray.com/tripadvisor/reflow
+[userguide]: https://github.com/tripadvisor/reflow/wiki
